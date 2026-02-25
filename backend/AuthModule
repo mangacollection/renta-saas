@@ -1,0 +1,2 @@
+providers: [TenantGuard]
+exports: [TenantGuard]

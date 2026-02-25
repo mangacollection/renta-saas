@@ -1,0 +1,35 @@
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { SubscriptionsService } from './subscriptions.service';
+
+@Controller('subscriptions')
+export class SubscriptionsController {
+  constructor(private readonly service: SubscriptionsService) {}
+
+  @Post()
+  create(@Body() body: {
+    accountId: string;
+    tenantName: string;
+    tenantRut?: string;
+    tenantEmail?: string;
+    billingDay?: number;
+    startDate?: string;
+  }) {
+    return this.service.createSubscription(body);
+  }
+
+  @Post('items')
+  addItem(@Body() body: {
+    subscriptionId: string;
+    type: string;
+    name: string;
+    amount: number;
+  }) {
+    return this.service.addItem(body);
+  }
+
+  @Get()
+  list(@Query('accountId') accountId: string) {
+    return this.service.listByAccount(accountId);
+  }
+}
+

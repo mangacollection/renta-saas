@@ -1,0 +1,133 @@
+generator client {
+provider = "prisma-client-js"
+}
+
+datasource db {
+provider = "postgresql"
+url = env("DATABASE_URL")
+}
+
+enum AccountStatus {
+active
+suspended
+}
+
+enum SubscriptionStatus {
+draft
+active
+cancelled
+}
+
+enum InvoiceStatus {
+pending
+paid
+failed
+void
+}
+
+enum PaymentMethod {
+transferencia
+link_pago
+efectivo
+}
+
+enum LedgerStatus {
+pending_payout
+paid_out
+}
+
+model Account {
+id String @id @default(cuid())
+name String
+status AccountStatus @default(active)
+maxSubscriptions Int @default(5)
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+users User[]
+subscriptions Subscription[]
+}
+
+model User {
+id String @id @default(cuid())
+accountId String
+email String @unique
+role String @default("owner")
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+account Account @relation(fields: [accountId], references: [id])
+}
+
+model Subscription {
+id String @id @default(cuid())
+accountId String
+tenantName String
+tenantRut String?
+tenantEmail String?
+billingDay Int @default(5)
+status SubscriptionStatus @default(draft)
+startDate DateTime @default(now())
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+account Account @relation(fields: [accountId], references: [id])
+items SubscriptionItem[]
+invoices Invoice[]
+}
+
+model SubscriptionItem {
+id String @id @default(cuid())
+subscriptionId String
+type String
+name String
+amount Int
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+subscription Subscription @relation(fields: [subscriptionId], references: [id])
+}
+
+model Invoice {
+id String @id @default(cuid())
+subscriptionId String
+period String
+total Int
+dueDate DateTime
+status InvoiceStatus @default(pending)
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+subscription Subscription @relation(fields: [subscriptionId], references: [id])
+payments Payment[]
+ledgerEntries LedgerEntry[]
+
+@@unique([subscriptionId, period])
+}
+
+model Payment {
+id String @id @default(cuid())
+invoiceId String
+method PaymentMethod
+amount Int
+paidAt DateTime @default(now())
+note String?
+createdAt DateTime @default(now())
+
+invoice Invoice @relation(fields: [invoiceId], references: [id])
+}
+
+model LedgerEntry {
+id String @id @default(cuid())
+accountId String
+invoiceId String
+grossAmount Int
+platformFee Int @default(0)
+netAmount Int
+status LedgerStatus @default(pending_payout)
+paidOutAt DateTime?
+reference String?
+createdAt DateTime @default(now())
+
+invoice Invoice @relation(fields: [invoiceId], references: [id])
+}
