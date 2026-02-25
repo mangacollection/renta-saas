@@ -1,0 +1,24 @@
+# Renta SaaS
+
+Plataforma SaaS multi-tenant para gestión de arriendos en Chile.
+
+## Stack
+- NestJS
+- Prisma
+- PostgreSQL
+- Firebase Auth
+- Docker
+- Google Cloud
+
+## Arquitectura
+- Multi-tenant basado en accountId
+- JWT verification con Firebase Admin
+- Prisma ORM
+
+## Estado
+Backend MVP funcional
+Frontend pendiente
+Pagos pendiente
+
+## Deploy futuro
+Cloud Run + Cloud SQL
