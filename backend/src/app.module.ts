@@ -1,16 +1,32 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
+
+import { AccountModule } from './account/account.module';
+import { AdminModule } from './admin/admin.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { PrismaModule } from './prisma/prisma.module';
-import { AdminModule } from './admin/admin.module';
-import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { AuthModule } from './auth/auth.module';
+import { TenantGuard } from './auth/tenant.guard';
 import { InvoicesModule } from './invoices/invoices.module';
 import { PaymentsModule } from './payments/payments.module';
 import { PayoutsModule } from './payouts/payouts.module';
-import { AuthModule } from './auth/auth.module';
-import { TenantGuard } from './auth/tenant.guard';
+import { PrismaModule } from './prisma/prisma.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { GmailModule } from './integrations/gmail/gmail.module';
+
 @Module({
-  imports: [PrismaModule, AdminModule, SubscriptionsModule, InvoicesModule, PaymentsModule, PayoutsModule, AuthModule],
+  imports: [
+    ScheduleModule.forRoot(),
+    PrismaModule,
+    AdminModule,
+    AccountModule,
+    SubscriptionsModule,
+    InvoicesModule,
+    PaymentsModule,
+    PayoutsModule,
+    AuthModule,
+    GmailModule,
+  ],
   controllers: [AppController],
   providers: [AppService, TenantGuard],
 })

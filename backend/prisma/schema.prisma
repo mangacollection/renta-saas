@@ -43,20 +43,48 @@ status AccountStatus @default(active)
 maxSubscriptions Int @default(5)
 createdAt DateTime @default(now())
 updatedAt DateTime @updatedAt
-
+billingStartedAt DateTime?
+trialEndsAt      DateTime?
+plan          String @default("early_adopter")
+planPrice     Int    @default(6990)
+billingStatus String @default("trial")
 users User[]
 subscriptions Subscription[]
+accountPayments AccountPayment[]
+}
+
+enum AccountPaymentStatus {
+  received
+  approved
+  rejected
+}
+
+model AccountPayment {
+  id          String  @id @default(cuid())
+  accountId   String
+  amount      Int
+  currency    String  @default("CLP")
+  method      String
+  channel     String?
+  reference   String?
+  status      AccountPaymentStatus @default(received)
+  createdAt   DateTime @default(now())
+  approvedAt  DateTime?
+  approvedBy  String?
+
+  account Account @relation(fields: [accountId], references: [id])
 }
 
 model User {
-id String @id @default(cuid())
-accountId String
-email String @unique
-role String @default("owner")
-createdAt DateTime @default(now())
-updatedAt DateTime @updatedAt
+  id        String   @id @default(cuid())
+  accountId String?
+  email     String   @unique
+  phone     String?
+  role      String   @default("owner")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-account Account @relation(fields: [accountId], references: [id])
+  account   Account? @relation(fields: [accountId], references: [id])
 }
 
 model Subscription {
@@ -65,6 +93,7 @@ accountId String
 tenantName String
 tenantRut String?
 tenantEmail String?
+tenantPhone String?
 billingDay Int @default(5)
 status SubscriptionStatus @default(draft)
 startDate DateTime @default(now())
@@ -130,4 +159,15 @@ reference String?
 createdAt DateTime @default(now())
 
 invoice Invoice @relation(fields: [invoiceId], references: [id])
+}
+model GmailWebhookJob {
+  id        String   @id @default(cuid())
+  historyId String
+  status    String   @default("pending") // pending | processing | done | failed
+  attempts  Int      @default(0)
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
 }
