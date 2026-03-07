@@ -11,8 +11,8 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
-  // ✅ Si ya hay sesión, redirigir por rol (NO mandar siempre a "/")
   useEffect(() => {
     if (initializing) return;
     if (!user) return;
@@ -28,7 +28,6 @@ export function LoginPage() {
           navigate("/", { replace: true });
         }
       } catch {
-        // fallback seguro
         navigate("/", { replace: true });
       }
     })();
@@ -53,52 +52,160 @@ export function LoginPage() {
     } catch (err: any) {
       const msg =
         err?.code === "auth/invalid-credential"
-          ? "Credenciales inválidas"
-          : err?.message ?? "Error de login";
-      setError(String(msg));
+          ? "Credenciales incorrectas"
+          : "Credenciales incorrectas";
+
+      setError(msg);
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="container">
-      <div className="card">
-        <h1 className="h1">Renta SaaS</h1>
-        <p className="sub">Ingresa con tu email y contraseña</p>
+    <div
+      className="container"
+      style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "flex-start",
+        paddingTop: "12vh",
+        minHeight: "100vh",
+      }}
+    >
+      <div
+        className="card"
+        style={{
+          width: "100%",
+          maxWidth: "420px",
+          background: "#ffffff",
+          borderRadius: "14px",
+          padding: "32px",
+          boxShadow: "0 20px 40px rgba(0,0,0,0.08)",
+        }}
+      >
+        <h1 className="h1">Iniciar sesión</h1>
+        <p
+          className="sub"
+          style={{
+            marginBottom: "24px",
+          }}
+        >
+          Accede a tu cuenta
+        </p>
 
         <form onSubmit={onSubmit} className="form">
           <label className="label">
-            Email
+            Correo electrónico
             <input
               className="input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               type="email"
               autoComplete="email"
-              placeholder="tu@email.com"
+              autoFocus
               required
+              style={{
+                width: "100%",
+                padding: "12px 14px",
+                border: "1px solid #e5e7eb",
+                borderRadius: "8px",
+                background: "#ffffff",
+                fontSize: "14px",
+                outline: "none",
+              }}
             />
           </label>
 
           <label className="label">
-            Password
-            <input
-              className="input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              type="password"
-              autoComplete="current-password"
-              placeholder="••••••••"
-              required
-            />
+            Contraseña
+            <div style={{ position: "relative" }}>
+              <input
+                className="input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                required
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  paddingRight: "56px",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "8px",
+                  background: "#ffffff",
+                  fontSize: "14px",
+                  outline: "none",
+                }}
+              />
+
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={
+                  showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
+                }
+                style={{
+                  position: "absolute",
+                  right: "12px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                  fontSize: "14px",
+                  color: "#666",
+                }}
+              >
+                {showPassword ? "Ocultar" : "Ver"}
+              </button>
+            </div>
           </label>
 
-          <button className="button" disabled={submitting} type="submit">
+          <button
+            className="button"
+            disabled={submitting}
+            type="submit"
+            onMouseEnter={(e) => {
+              if (!submitting) e.currentTarget.style.background = "#6d28d9";
+            }}
+            onMouseLeave={(e) => {
+              if (!submitting) e.currentTarget.style.background = "#7c3aed";
+            }}
+            style={{
+              width: "100%",
+              padding: "12px 16px",
+              borderRadius: "8px",
+              border: "none",
+              background: submitting ? "#a78bfa" : "#7c3aed",
+              color: "#ffffff",
+              fontSize: "14px",
+              fontWeight: 600,
+              cursor: submitting ? "not-allowed" : "pointer",
+              opacity: submitting ? 0.9 : 1,
+              transition: "all 0.2s ease",
+            }}
+          >
             {submitting ? "Ingresando..." : "Ingresar"}
           </button>
 
-          {error && <div className="errorBox">{error}</div>}
+          {error && (
+            <div
+              className="errorBox"
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: "8px",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                color: "#b91c1c",
+                fontSize: "14px",
+                lineHeight: 1.4,
+              }}
+            >
+              {error}
+            </div>
+          )}
         </form>
       </div>
     </div>
