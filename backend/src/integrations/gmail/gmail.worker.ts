@@ -72,6 +72,10 @@ export class GmailWorker {
     private readonly tenantPaymentsService: TenantPaymentsService,
   ) {}
 
+    onModuleInit() {
+      this.logger.log('GmailWorker initialized');
+    }
+
   @Cron('*/30 * * * * *')
   async processPendingJobs() {
     this.logger.debug('GmailWorker tick');
