@@ -9,6 +9,7 @@ import { AuthModule } from './auth/auth.module';
 import { TenantGuard } from './auth/tenant.guard';
 import { InvoicesModule } from './invoices/invoices.module';
 import { PaymentsModule } from './payments/payments.module';
+import { TenantPaymentsModule } from './tenant-payments/tenant-payments.module';
 import { PayoutsModule } from './payouts/payouts.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
@@ -23,6 +24,7 @@ import { GmailModule } from './integrations/gmail/gmail.module';
     SubscriptionsModule,
     InvoicesModule,
     PaymentsModule,
+    TenantPaymentsModule,
     PayoutsModule,
     AuthModule,
     GmailModule,
