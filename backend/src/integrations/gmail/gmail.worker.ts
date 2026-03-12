@@ -75,6 +75,7 @@ export class GmailWorker {
   @Cron('*/30 * * * * *')
   async processPendingJobs() {
     this.logger.debug('GmailWorker tick');
+    this.logger.log('GmailWorker tick');
 
     const job = await this.prisma.gmailWebhookJob.findFirst({
       where: { status: 'pending' },
