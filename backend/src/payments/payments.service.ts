@@ -25,7 +25,6 @@ export class PaymentsService {
 
     if (!invoice) throw new BadRequestException('Invoice not found');
 
-    // Pago + actualizar invoice + ledger en una transacción
     const fee = Math.trunc(platformFee ?? 0);
     const gross = Math.trunc(amount);
     const net = gross - fee;

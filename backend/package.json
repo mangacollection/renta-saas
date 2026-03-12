@@ -26,6 +26,8 @@
     "@nestjs/schedule": "^6.1.1",
     "@prisma/client": "^6.19.2",
     "firebase-admin": "^13.6.1",
+    "google-auth-library": "^10.6.1",
+    "googleapis": "^171.4.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },

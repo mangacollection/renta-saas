@@ -7,6 +7,8 @@ import { SubscriptionCreatePage } from "@/features/subscriptions/SubscriptionCre
 import InvoicesPage from "@/features/invoices/InvoicesPage";
 import AdminAccountPaymentsPage from "@/features/admin/AdminAccountPaymentsPage";
 import AdminAccountsPage from "@/features/admin/AdminAccountsPage";
+import TenantPaymentsPage from "@/features/tenant-payments/TenantPaymentsPage";
+import TenantPaymentSendersPage from "@/features/tenant-payment-senders/TenantPaymentSendersPage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -17,6 +19,10 @@ export const router = createBrowserRouter([
       { index: true, element: <SubscriptionsPage /> },
       { path: "subscriptions/new", element: <SubscriptionCreatePage /> },
       { path: "invoices", element: <InvoicesPage /> },
+      { path: "tenant-payments", element: <TenantPaymentsPage /> },
+
+      { path: "tenant-payment-senders", element: <TenantPaymentSendersPage /> }, // ← NUEVA RUTA
+
       { path: "admin/account-payments", element: <AdminAccountPaymentsPage /> },
       { path: "admin/accounts", element: <AdminAccountsPage /> },
     ],

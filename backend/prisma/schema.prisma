@@ -1,56 +1,39 @@
 generator client {
-provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-provider = "postgresql"
-url = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum AccountStatus {
-active
-suspended
+  active
+  suspended
 }
 
 enum SubscriptionStatus {
-draft
-active
-cancelled
+  draft
+  active
+  cancelled
 }
 
 enum InvoiceStatus {
-pending
-paid
-failed
-void
+  pending
+  paid
+  failed
+  void
 }
 
 enum PaymentMethod {
-transferencia
-link_pago
-efectivo
+  transferencia
+  link_pago
+  efectivo
 }
 
 enum LedgerStatus {
-pending_payout
-paid_out
-}
-
-model Account {
-id String @id @default(cuid())
-name String
-status AccountStatus @default(active)
-maxSubscriptions Int @default(5)
-createdAt DateTime @default(now())
-updatedAt DateTime @updatedAt
-billingStartedAt DateTime?
-trialEndsAt      DateTime?
-plan          String @default("early_adopter")
-planPrice     Int    @default(6990)
-billingStatus String @default("trial")
-users User[]
-subscriptions Subscription[]
-accountPayments AccountPayment[]
+  pending_payout
+  paid_out
 }
 
 enum AccountPaymentStatus {
@@ -59,115 +42,242 @@ enum AccountPaymentStatus {
   rejected
 }
 
+enum TenantPaymentStatus {
+  received
+  matched
+  partial_applied
+  applied
+  overpayment
+  rejected
+}
+
+model Account {
+  id               String        @id @default(cuid())
+  name             String
+  status           AccountStatus @default(active)
+  maxSubscriptions Int           @default(5)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  billingStartedAt DateTime?
+  billingStatus    String        @default("trial")
+  plan             String        @default("early_adopter")
+  planPrice        Int           @default(6990)
+  trialEndsAt      DateTime?
+
+  accountPayments AccountPayment[]
+  paymentSenders  PaymentSender[]
+  subscriptions   Subscription[]
+  users           User[]
+  tenants         Tenant[]
+  tenantPayments  TenantPayment[]
+
+  tenantPaymentSenders TenantPaymentSender[]
+}
+
 model AccountPayment {
-  id          String  @id @default(cuid())
-  accountId   String
-  amount      Int
-  currency    String  @default("CLP")
-  method      String
-  channel     String?
-  reference   String?
-  status      AccountPaymentStatus @default(received)
-  createdAt   DateTime @default(now())
-  approvedAt  DateTime?
-  approvedBy  String?
+  id         String               @id @default(cuid())
+  accountId  String
+  amount     Int
+  currency   String               @default("CLP")
+  method     String
+  channel    String?
+  reference  String?
+  status     AccountPaymentStatus @default(received)
+  createdAt  DateTime             @default(now())
+  approvedAt DateTime?
+  approvedBy String?
 
   account Account @relation(fields: [accountId], references: [id])
+
+  @@index([accountId, createdAt])
 }
 
 model User {
   id        String   @id @default(cuid())
   accountId String?
   email     String   @unique
-  phone     String?
   role      String   @default("owner")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  phone     String?
 
-  account   Account? @relation(fields: [accountId], references: [id])
+  account Account? @relation(fields: [accountId], references: [id])
 }
 
 model Subscription {
-id String @id @default(cuid())
-accountId String
-tenantName String
-tenantRut String?
-tenantEmail String?
-tenantPhone String?
-billingDay Int @default(5)
-status SubscriptionStatus @default(draft)
-startDate DateTime @default(now())
-createdAt DateTime @default(now())
-updatedAt DateTime @updatedAt
+  id          String             @id @default(cuid())
+  accountId   String
+  tenantName  String
+  tenantRut   String?
+  tenantEmail String?
+  billingDay  Int                @default(5)
+  status      SubscriptionStatus @default(draft)
+  startDate   DateTime           @default(now())
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  tenantPhone String?
 
-account Account @relation(fields: [accountId], references: [id])
-items SubscriptionItem[]
-invoices Invoice[]
+  invoices       Invoice[]
+  account        Account            @relation(fields: [accountId], references: [id])
+  items          SubscriptionItem[]
+  tenant         Tenant?
+  tenantPayments TenantPayment[]
+
+  @@index([accountId])
+}
+
+model Tenant {
+  id             String   @id @default(cuid())
+  accountId      String
+  subscriptionId String   @unique
+  name           String
+  rut            String?
+  email          String?
+  phone          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  account              Account               @relation(fields: [accountId], references: [id])
+  subscription         Subscription          @relation(fields: [subscriptionId], references: [id])
+  payments             TenantPayment[]
+  tenantPaymentSenders TenantPaymentSender[]
+
+  @@index([accountId])
+}
+
+model TenantPaymentSender {
+  id        String   @id @default(cuid())
+  accountId String
+  tenantId  String
+  email     String
+  bank      String?
+  createdAt DateTime @default(now())
+
+  account Account @relation(fields: [accountId], references: [id])
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, email])
+  @@index([accountId, email])
+  @@index([email])
 }
 
 model SubscriptionItem {
-id String @id @default(cuid())
-subscriptionId String
-type String
-name String
-amount Int
-createdAt DateTime @default(now())
-updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  subscriptionId String
+  type           String
+  name           String
+  amount         Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-subscription Subscription @relation(fields: [subscriptionId], references: [id])
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@index([subscriptionId])
 }
 
 model Invoice {
-id String @id @default(cuid())
-subscriptionId String
-period String
-total Int
-dueDate DateTime
-status InvoiceStatus @default(pending)
-createdAt DateTime @default(now())
-updatedAt DateTime @updatedAt
+  id             String        @id @default(cuid())
+  subscriptionId String
+  period         String
+  total          Int
+  dueDate        DateTime
+  status         InvoiceStatus @default(pending)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-subscription Subscription @relation(fields: [subscriptionId], references: [id])
-payments Payment[]
-ledgerEntries LedgerEntry[]
+  subscription   Subscription    @relation(fields: [subscriptionId], references: [id])
+  ledgerEntries  LedgerEntry[]
+  payments       Payment[]
+  tenantPayments TenantPayment[]
 
-@@unique([subscriptionId, period])
+  @@unique([subscriptionId, period])
+  @@index([subscriptionId])
 }
 
 model Payment {
-id String @id @default(cuid())
-invoiceId String
-method PaymentMethod
-amount Int
-paidAt DateTime @default(now())
-note String?
-createdAt DateTime @default(now())
+  id        String        @id @default(cuid())
+  invoiceId String
+  method    PaymentMethod
+  amount    Int
+  paidAt    DateTime      @default(now())
+  note      String?
+  createdAt DateTime      @default(now())
 
-invoice Invoice @relation(fields: [invoiceId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+}
+
+model TenantPayment {
+  id             String              @id @default(cuid())
+  accountId      String
+  tenantId       String
+  subscriptionId String
+  invoiceId      String?
+  amount         Int
+  currency       String              @default("CLP")
+  channel        String
+  reference      String?
+  status         TenantPaymentStatus @default(received)
+  rawMessage     String?
+  paidAt         DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  account      Account      @relation(fields: [accountId], references: [id])
+  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+  invoice      Invoice?     @relation(fields: [invoiceId], references: [id])
+
+  @@index([accountId, createdAt])
+  @@index([tenantId, createdAt])
+  @@index([subscriptionId, createdAt])
+  @@index([invoiceId])
 }
 
 model LedgerEntry {
-id String @id @default(cuid())
-accountId String
-invoiceId String
-grossAmount Int
-platformFee Int @default(0)
-netAmount Int
-status LedgerStatus @default(pending_payout)
-paidOutAt DateTime?
-reference String?
-createdAt DateTime @default(now())
+  id          String       @id @default(cuid())
+  accountId   String
+  invoiceId   String
+  grossAmount Int
+  platformFee Int          @default(0)
+  netAmount   Int
+  status      LedgerStatus @default(pending_payout)
+  paidOutAt   DateTime?
+  reference   String?
+  createdAt   DateTime     @default(now())
 
-invoice Invoice @relation(fields: [invoiceId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([accountId, createdAt])
+  @@index([invoiceId])
 }
+
 model GmailWebhookJob {
   id        String   @id @default(cuid())
   historyId String
-  status    String   @default("pending") // pending | processing | done | failed
+  status    String   @default("pending")
   attempts  Int      @default(0)
   lastError String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status, createdAt])
+}
+
+model GmailProcessedMessage {
+  id        String   @id
+  messageId String   @unique
+  createdAt DateTime @default(now())
+}
+
+model PaymentSender {
+  id        String   @id
+  email     String
+  accountId String
+  createdAt DateTime @default(now())
+
+  account Account @relation(fields: [accountId], references: [id])
+
+  @@unique([email, accountId])
 }

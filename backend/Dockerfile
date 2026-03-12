@@ -23,4 +23,4 @@ COPY --from=builder /app/backend/prisma ./prisma
 
 
 EXPOSE 8080
-CMD ["node", "dist/src/main.js"]
+CMD ["node", "dist/main.js"]

@@ -5,6 +5,7 @@ import { getSubscriptions } from "./subscriptions.api";
 import type { Subscription } from "./subscriptions.types";
 import { getAccountPlan } from "@/features/account/account.api";
 import type { AccountPlan } from "@/features/account/account.types";
+import { setPageTitle } from "@/lib/pageTitle";
 
 type UiState =
   | { status: "loading" }
@@ -149,9 +150,9 @@ export function SubscriptionsPage() {
     }
   }
 
-  useEffect(() => {
-    void load();
-  }, []);
+    useEffect(() => {
+      setPageTitle("Nuevo Arriendo");
+    }, []);
 
   useEffect(() => {
     async function loadPlan() {
@@ -330,6 +331,14 @@ export function SubscriptionsPage() {
 
           <GhostButton onClick={() => navigate("/invoices")}>
             Ver facturas
+          </GhostButton>
+
+          <GhostButton onClick={() => navigate("/tenant-payments")}>
+            Pagos inquilinos
+          </GhostButton>
+
+          <GhostButton onClick={() => navigate("/tenant-payment-senders")}>
+            Remitentes bancarios
           </GhostButton>
 
           <GhostButton onClick={load}>Refrescar</GhostButton>
