@@ -72,9 +72,9 @@ export class GmailWorker {
     private readonly tenantPaymentsService: TenantPaymentsService,
   ) {}
 
-    onModuleInit() {
-      this.logger.log('GmailWorker initialized');
-    }
+  onModuleInit() {
+    this.logger.log('GmailWorker initialized');
+  }
 
   @Cron('*/30 * * * * *')
   async processPendingJobs() {
@@ -110,13 +110,23 @@ export class GmailWorker {
         `Marked GmailWebhookJob as processing id=${job.id} historyId=${job.historyId}`,
       );
 
-      const historyResponse = await gmail.users.history.list({
-        userId: 'me',
-        startHistoryId: job.historyId,
-        historyTypes: ['messageAdded'],
+      const cursor = await this.prisma.gmailCursor.findUnique({
+        where: { id: 'tenant' },
       });
 
+      if (!cursor) {
+        this.logger.error('GmailCursor not initialized');
+        return;
+      }
+
+      const historyResponse = await gmail.users.history.list({
+        userId: 'me',
+        startHistoryId: cursor.historyId,
+      });
+
+      const latestHistoryId = historyResponse.data.historyId ?? job.historyId;
       const historyEntries = historyResponse.data.history ?? [];
+
       const addedMessages = historyEntries.flatMap((entry) =>
         (entry.messagesAdded ?? []).map((item) => item.message).filter(Boolean),
       );
@@ -215,7 +225,7 @@ export class GmailWorker {
 
           const senderMapping =
             await this.tenantPaymentSendersService.findByEmail({
-              accountId: 'cmm12342c0000pgkjk2myqgrz',
+              accountId: process.env.DEFAULT_ACCOUNT_ID!,
               email: normalizedFrom,
             });
 
@@ -246,7 +256,7 @@ export class GmailWorker {
               rawMessage,
             });
 
-                   this.logger.log(
+          this.logger.log(
             `Tenant payment applied messageId=${messageId} applied=${paymentResult.applied ? 'yes' : 'no'} status=${paymentResult.tenantPayment.status}`,
           );
 
@@ -276,6 +286,13 @@ export class GmailWorker {
           });
         }
       }
+
+      await this.prisma.gmailCursor.update({
+        where: { id: 'tenant' },
+        data: {
+          historyId: latestHistoryId,
+        },
+      });
 
       await this.prisma.gmailWebhookJob.update({
         where: { id: job.id },

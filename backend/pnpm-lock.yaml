@@ -23,6 +23,9 @@ importers:
       '@prisma/client':
         specifier: ^6.19.2
         version: 6.19.2(prisma@6.19.2(typescript@5.9.3))(typescript@5.9.3)
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
       firebase-admin:
         specifier: ^13.6.1
         version: 13.6.1
