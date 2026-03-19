@@ -10,6 +10,7 @@ RUN pnpm install --frozen-lockfile
 COPY backend/ ./
 RUN pnpm exec prisma generate
 RUN pnpm build
+RUN pnpm prisma:deploy
 
 # ---- runtime stage ----
 FROM node:20-slim AS runner
@@ -20,6 +21,7 @@ COPY --from=builder /app/backend/package.json ./package.json
 COPY --from=builder /app/backend/node_modules ./node_modules
 COPY --from=builder /app/backend/dist ./dist
 COPY --from=builder /app/backend/prisma ./prisma
+RUN npx prisma generate
 
 
 EXPOSE 8080

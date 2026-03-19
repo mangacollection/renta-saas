@@ -271,6 +271,13 @@ model GmailProcessedMessage {
   createdAt DateTime @default(now())
 }
 
+model GmailCursor {
+  id         String   @id
+  historyId  String
+  expiration String?
+  updatedAt  DateTime @updatedAt
+}
+
 model PaymentSender {
   id        String   @id
   email     String
