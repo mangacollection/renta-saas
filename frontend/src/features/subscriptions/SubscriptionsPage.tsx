@@ -155,8 +155,9 @@ export function SubscriptionsPage() {
   }, []);
 
   useEffect(() => {
+    if (!user) return;
     void load();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     async function loadPlan() {
