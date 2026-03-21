@@ -10,7 +10,6 @@ RUN pnpm install --frozen-lockfile
 COPY backend/ ./
 RUN pnpm exec prisma generate
 RUN pnpm build
-RUN pnpm prisma:deploy
 
 # ---- runtime stage ----
 FROM node:20-slim AS runner
