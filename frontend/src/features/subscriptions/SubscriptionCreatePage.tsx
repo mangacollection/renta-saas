@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   activateSubscription,
@@ -116,6 +116,8 @@ export function SubscriptionCreatePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isSavingItemsRef = useRef(false);
+
   const step1Done = !!subscriptionId;
   const step2Done = savedItemIds.length > 0;
 
@@ -124,6 +126,8 @@ export function SubscriptionCreatePage() {
   }, [items]);
 
   async function onCreate() {
+    if (loading) return;
+
     setError(null);
 
     if (!tenantName.trim()) {
@@ -154,12 +158,15 @@ export function SubscriptionCreatePage() {
   }
 
   async function onSaveItems() {
+    if (loading || isSavingItemsRef.current) return;
+
     setError(null);
 
     if (!subscriptionId) {
       setError("Primero crea el arriendo.");
       return;
     }
+
     if (!items.length) {
       setError("Agrega al menos un item.");
       return;
@@ -170,6 +177,7 @@ export function SubscriptionCreatePage() {
         setError("Todos los items deben tener nombre.");
         return;
       }
+
       const amount = parseInt(it.amount || "0", 10);
       if (!Number.isFinite(amount) || amount <= 0) {
         setError("Todos los items deben tener monto > 0.");
@@ -178,8 +186,11 @@ export function SubscriptionCreatePage() {
     }
 
     try {
+      isSavingItemsRef.current = true;
       setLoading(true);
+
       const createdIds: string[] = [];
+
       for (const it of items) {
         const created = await addSubscriptionItem({
           subscriptionId,
@@ -189,21 +200,26 @@ export function SubscriptionCreatePage() {
         });
         createdIds.push(created.id);
       }
+
       setSavedItemIds(createdIds);
     } catch (e: any) {
       setError(normalizeError(e));
     } finally {
       setLoading(false);
+      isSavingItemsRef.current = false;
     }
   }
 
   async function onActivate() {
+    if (loading) return;
+
     setError(null);
 
     if (!subscriptionId) {
       setError("Primero crea el arriendo.");
       return;
     }
+
     if (!step2Done) {
       setError("Primero guarda al menos un item.");
       return;
@@ -318,11 +334,11 @@ export function SubscriptionCreatePage() {
             <div style={{ display: "grid", gap: 6 }}>
               <label style={labelStyle}>Teléfono (opcional)</label>
               <input
-              value={tenantPhone}
-              onChange={(e) => setTenantPhone(e.target.value)}
-              disabled={loading || step1Done}
-              placeholder="Ej: +56912345678"
-              style={inputStyle}
+                value={tenantPhone}
+                onChange={(e) => setTenantPhone(e.target.value)}
+                disabled={loading || step1Done}
+                placeholder="Ej: +56912345678"
+                style={inputStyle}
               />
             </div>
 
@@ -378,7 +394,7 @@ export function SubscriptionCreatePage() {
 
               <ButtonPrimary
                 onClick={onSaveItems}
-                disabled={loading || !subscriptionId || items.length === 0}
+                disabled={loading || !subscriptionId || items.length === 0 || step2Done}
               >
                 {step2Done ? "Items guardados" : loading ? "Guardando..." : "Guardar items"}
               </ButtonPrimary>

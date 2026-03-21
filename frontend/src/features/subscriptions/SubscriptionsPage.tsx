@@ -150,9 +150,13 @@ export function SubscriptionsPage() {
     }
   }
 
-    useEffect(() => {
-      setPageTitle("Nuevo Arriendo");
-    }, []);
+  useEffect(() => {
+    setPageTitle("Nuevo Arriendo");
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, []);
 
   useEffect(() => {
     async function loadPlan() {
@@ -190,7 +194,6 @@ export function SubscriptionsPage() {
         margin: "0 auto",
       }}
     >
-      {/* Header (similar vibe to invoices) */}
       <header
         style={{
           display: "flex",
@@ -244,10 +247,10 @@ export function SubscriptionsPage() {
                 borderRadius: 14,
                 background:
                   plan.billingStatus === "trial"
-                    ? "#FEF9C3" // amarillo suave
+                    ? "#FEF9C3"
                     : plan.billingStatus === "active"
-                    ? "#DCFCE7" // verde suave
-                    : "#FEE2E2", // rojo suave (past_due)
+                    ? "#DCFCE7"
+                    : "#FEE2E2",
                 border: "1px solid #e6e8ef",
                 fontSize: 13,
                 color: "#0f172a",
@@ -414,23 +417,22 @@ export function SubscriptionsPage() {
                 const total = sumItems(s);
                 return (
                   <tr key={s.id}>
-                   <td style={td}>
-  <div style={{ fontWeight: 800 }}>{s.tenantName}</div>
+                    <td style={td}>
+                      <div style={{ fontWeight: 800 }}>{s.tenantName}</div>
 
-  <div style={{ fontSize: 12, color: "#64748b" }}>
-    {s.tenantEmail ?? "—"}
-    {s.tenantRut ? ` • ${s.tenantRut}` : ""}
-  </div>
+                      <div style={{ fontSize: 12, color: "#64748b" }}>
+                        {s.tenantEmail ?? "—"}
+                        {s.tenantRut ? ` • ${s.tenantRut}` : ""}
+                      </div>
 
-  {/* 👇 Teléfono agregado */}
-  <div style={{ fontSize: 12, color: "#475569", marginTop: 2 }}>
-    {s.tenantPhone ? `📞 ${s.tenantPhone}` : "📞 —"}
-  </div>
+                      <div style={{ fontSize: 12, color: "#475569", marginTop: 2 }}>
+                        {s.tenantPhone ? `📞 ${s.tenantPhone}` : "📞 —"}
+                      </div>
 
-  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
-    <code>{s.id}</code>
-  </div>
-</td>
+                      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+                        <code>{s.id}</code>
+                      </div>
+                    </td>
 
                     <td style={td}>
                       <StatusBadge status={s.status} />
