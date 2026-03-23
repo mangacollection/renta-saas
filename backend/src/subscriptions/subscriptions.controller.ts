@@ -4,7 +4,9 @@ import {
   Get,
   Patch,
   Post,
+  Param,
   UseGuards,
+  Delete,
 } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { TenantGuard } from '../auth/tenant.guard';
@@ -47,6 +49,23 @@ export class SubscriptionsController {
   ) {
     return this.service.addItem(body);
   }
+
+      @Delete('items/:id')
+    deleteItem(
+      @Param('id') id: string,
+      @AccountId() accountId: string,
+    ) {
+      return this.service.deleteItem(id, accountId);
+    }
+
+      @Patch('items/:id')
+    updateItem(
+      @Param('id') id: string,
+      @AccountId() accountId: string,
+      @Body() body: { name?: string; amount?: number },
+    ) {
+      return this.service.updateItem(id, body, accountId);
+    }
 
   @Patch('activate')
   activate(@Body() body: { subscriptionId: string }) {
