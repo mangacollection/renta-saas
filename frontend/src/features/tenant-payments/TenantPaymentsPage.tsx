@@ -1,21 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import {
-  getTenantPayments,
-  type TenantPayment,
-} from "./tenant-payments.api";
+import { getTenantPayments } from "./tenant-payments.api";
+import { EmptyState } from "@/components/EmptyState";
 
-type UiState =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "success"; data: TenantPayment[] };
+/* ===============================
+   🔹 TYPES
+================================ */
+type PaymentView = "all" | "recent";
 
-function formatDateTime(iso?: string | null) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? iso : d.toLocaleString("es-CL");
-}
-
+/* ===============================
+   🔹 HELPERS
+================================ */
 function formatCLP(value: number) {
   return new Intl.NumberFormat("es-CL", {
     style: "currency",
@@ -24,353 +18,337 @@ function formatCLP(value: number) {
   }).format(value);
 }
 
-function normalizeError(err: any): string {
-  const msg =
-    err?.response?.data?.message ??
-    err?.message ??
-    "No se pudo cargar pagos de inquilinos";
-  return Array.isArray(msg) ? msg.join("\n") : String(msg);
+function formatDate(date: string) {
+  return new Date(date).toLocaleDateString("es-CL");
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const s = String(status).toLowerCase();
+function formatDateTime(date: string) {
+  return new Date(date).toLocaleString("es-CL");
+}
 
-  let bg = "#e5e7eb";
-  let color = "#374151";
-  let label = status;
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth < 768 : false
+  );
 
-  if (s === "received") {
-    bg = "#e5e7eb";
-    color = "#374151";
-    label = "Recibido";
-  }
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
 
-  if (s === "partial_applied") {
-    bg = "#f59e0b";
-    color = "#ffffff";
-    label = "Parcial";
-  }
+  return isMobile;
+}
 
-  if (s === "applied") {
-    bg = "#16a34a";
-    color = "#ffffff";
-    label = "Aplicado";
-  }
-
-  if (s === "overpayment") {
-    bg = "#7c3aed";
-    color = "#ffffff";
-    label = "Sobrepago";
-  }
-
+/* ===============================
+   🔹 UI COMPONENTS
+================================ */
+function StatCard({
+  label,
+  value,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
-    <span
+    <button
+      onClick={onClick}
       style={{
-        display: "inline-block",
-        padding: "5px 12px",
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 700,
-        background: bg,
-        color,
-        minWidth: 110,
-        textAlign: "center",
+        padding: 16,
+        borderRadius: 22,
+        background: active
+          ? "linear-gradient(180deg, rgba(109,94,252,0.12), rgba(109,94,252,0.08))"
+          : "#fff",
+        border: active
+          ? "1px solid rgba(109,94,252,0.25)"
+          : "1px solid #eef2f7",
+        boxShadow: active
+          ? "0 14px 30px rgba(109,94,252,0.10)"
+          : "0 8px 24px rgba(15,23,42,0.04)",
+        textAlign: "left",
+        cursor: "pointer",
       }}
     >
-      {label}
-    </span>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>
+        {label}
+      </div>
+      <div style={{ marginTop: 6, fontSize: 22, fontWeight: 800 }}>
+        {value}
+      </div>
+    </button>
   );
 }
 
-const th: React.CSSProperties = {
-  padding: "14px 12px",
-  borderBottom: "1px solid #e5e7eb",
-  fontWeight: 700,
-  fontSize: 14,
-  color: "#111827",
-  whiteSpace: "nowrap",
-  textAlign: "left",
-};
+function PaymentDetail({ payment }: any) {
+  return (
+    <div
+      style={{
+        padding: 14,
+        borderRadius: 16,
+        background: "#fafbff",
+        border: "1px solid #eef2f7",
+        display: "grid",
+        gap: 8,
+      }}
+    >
+      <div><b>Arrendatario:</b> {payment.tenantName}</div>
+      <div><b>Email:</b> {payment.tenantEmail ?? "—"}</div>
+      <div><b>Referencia:</b> {payment.reference ?? "—"}</div>
+      <div><b>Fecha:</b> {formatDateTime(payment.createdAt)}</div>
+    </div>
+  );
+}
 
-const td: React.CSSProperties = {
-  padding: "14px 12px",
-  borderBottom: "1px solid #e5e7eb",
-  color: "#111827",
-  fontSize: 14,
-  verticalAlign: "middle",
-};
-
-export default function TenantPaymentsPage() {
-  const [ui, setUi] = useState<UiState>({ status: "loading" });
-
-  async function load() {
-    try {
-      setUi({ status: "loading" });
-      const payments = await getTenantPayments();
-      setUi({ status: "success", data: payments });
-    } catch (err: any) {
-      setUi({ status: "error", message: normalizeError(err) });
-    }
-  }
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  const stats = useMemo(() => {
-    if (ui.status !== "success") return null;
-
-    const total = ui.data.length;
-    const applied = ui.data.filter((p) => p.status === "applied").length;
-    const partial = ui.data.filter((p) => p.status === "partial_applied").length;
-    const received = ui.data.filter((p) => p.status === "received").length;
-    const overpayment = ui.data.filter((p) => p.status === "overpayment").length;
-
-    return { total, applied, partial, received, overpayment };
-  }, [ui]);
+function PaymentCard({ payment }: any) {
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <div
       style={{
-        padding: 24,
-        fontFamily: "system-ui",
-        maxWidth: 1100,
-        margin: "0 auto",
+        padding: 16,
+        borderRadius: 20,
+        background: "#fff",
+        border: "1px solid #eef2f7",
+        boxShadow: "0 10px 28px rgba(15,23,42,0.05)",
+        display: "grid",
+        gap: 10,
       }}
     >
-      <header
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ fontWeight: 700 }}>{payment.tenantName}</div>
+          <div style={{ fontSize: 12, color: "#64748b" }}>
+            {payment.tenantEmail ?? "Sin email"}
+          </div>
+        </div>
+
+        <div style={{ fontWeight: 800 }}>
+          {formatCLP(payment.amount)}
+        </div>
+      </div>
+
+      <button
+        onClick={() => setExpanded((p) => !p)}
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: 16,
-          padding: 18,
-          borderRadius: 18,
-          background: "#ffffff",
-          border: "1px solid #e6e8ef",
-          boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
-          marginBottom: 18,
+          border: "none",
+          background: "transparent",
+          color: "#5b4ee6",
+          fontWeight: 700,
+          cursor: "pointer",
+          padding: 0,
         }}
       >
-        <div>
-          <h2 style={{ margin: 0, color: "#0f172a" }}>Pagos de Inquilinos</h2>
+        {expanded ? "Ocultar detalle ↑" : "Ver detalle ↓"}
+      </button>
 
-          <div style={{ marginTop: 6, color: "#64748b", fontSize: 14 }}>
-            Historial de pagos registrados desde correo bancario o carga manual.
-          </div>
+      {expanded && <PaymentDetail payment={payment} />}
+    </div>
+  );
+}
 
-          {stats && (
-            <div
-              style={{
-                marginTop: 10,
-                display: "flex",
-                gap: 10,
-                flexWrap: "wrap",
-                color: "#64748b",
-                fontSize: 13,
-              }}
-            >
-              <span>Total: <b>{stats.total}</b></span>
-              <span>Aplicados: <b>{stats.applied}</b></span>
-              <span>Parciales: <b>{stats.partial}</b></span>
-              <span>Recibidos: <b>{stats.received}</b></span>
-              <span>Sobrepagos: <b>{stats.overpayment}</b></span>
-            </div>
-          )}
+/* ===============================
+   🔹 MAIN PAGE
+================================ */
+export default function TenantPaymentsPage() {
+  const [payments, setPayments] = useState<any[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [view, setView] = useState<PaymentView>("all");
+
+  const isMobile = useIsMobile();
+
+  useEffect(() => {
+    getTenantPayments().then(setPayments);
+  }, []);
+
+  /* ===============================
+     🔹 STATS
+  ================================= */
+  const stats = useMemo(() => {
+    return {
+      total: payments.length,
+      recent: payments.filter((p) => {
+        const d = new Date(p.createdAt);
+        const now = new Date();
+        return now.getTime() - d.getTime() < 1000 * 60 * 60 * 24 * 7;
+      }).length,
+    };
+  }, [payments]);
+
+  /* ===============================
+     🔹 FILTER
+  ================================= */
+  const filtered = useMemo(() => {
+    let data = payments;
+
+    if (view === "recent") {
+      data = data.filter((p) => {
+        const d = new Date(p.createdAt);
+        return Date.now() - d.getTime() < 7 * 86400000;
+      });
+    }
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      data = data.filter(
+        (p) =>
+          p.tenantName?.toLowerCase().includes(q) ||
+          p.tenantEmail?.toLowerCase().includes(q)
+      );
+    }
+
+    return data;
+  }, [payments, search, view]);
+
+  /* ===============================
+     🔹 EMPTY STATE
+  ================================= */
+  if (!payments.length) {
+    return (
+      <EmptyState
+        title="No hay pagos registrados"
+        description="Los pagos aparecerán automáticamente cuando se procesen transferencias."
+      />
+    );
+  }
+
+  /* ===============================
+     🔹 UI
+  ================================= */
+  return (
+    <div style={{ padding: 8, maxWidth: 1180, margin: "0 auto" }}>
+      {/* HEADER */}
+      <section
+        style={{
+          padding: 20,
+          borderRadius: 24,
+          background: "#fff",
+          border: "1px solid #eef2f7",
+          boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
+        }}
+      >
+        <div style={{ color: "#64748b" }}>
+          Revisa los pagos recibidos de tus arrendatarios.
         </div>
+      </section>
 
-        <Link
-          to="/"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "10px 16px",
-            borderRadius: 12,
-            border: "1px solid #d7dbe6",
-            background: "#ffffff",
-            color: "#0f172a",
-            fontWeight: 600,
-            textDecoration: "none",
-            minHeight: 40,
-            boxSizing: "border-box",
-          }}
-        >
-          Volver
-        </Link>
-      </header>
+      {/* STATS */}
+      <div
+        style={{
+          marginTop: 16,
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(2,1fr)",
+          gap: 12,
+        }}
+      >
+        <StatCard
+          label="Todos"
+          value={stats.total}
+          active={view === "all"}
+          onClick={() => setView("all")}
+        />
+        <StatCard
+          label="Últimos 7 días"
+          value={stats.recent}
+          active={view === "recent"}
+          onClick={() => setView("recent")}
+        />
+      </div>
 
-      {ui.status === "loading" && (
-        <div
-          style={{
-            padding: 24,
-            borderRadius: 18,
-            background: "#ffffff",
-            border: "1px solid #e6e8ef",
-          }}
-        >
-          Cargando pagos...
-        </div>
+      {/* VIEW */}
+      <div style={{ marginTop: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>
+          Vista actual
+        </span>{" "}
+        <span style={{ color: "#5b4ee6", fontWeight: 700 }}>
+          {view === "all" ? "Todos" : "Últimos 7 días"}
+        </span>
+      </div>
+
+      {/* SEARCH */}
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Buscar arrendatario o correo"
+        style={{
+          marginTop: 12,
+          width: "100%",
+          padding: 12,
+          borderRadius: 16,
+          border: "1px solid #e6eaf2",
+        }}
+      />
+
+      <div style={{ marginTop: 16 }} />
+
+      {/* EMPTY FILTER */}
+      {filtered.length === 0 && (
+        <EmptyState
+          title="No hay resultados"
+          description="Prueba otro filtro o búsqueda."
+        />
       )}
 
-      {ui.status === "error" && (
-        <div
-          style={{
-            padding: 24,
-            borderRadius: 18,
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            color: "#b91c1c",
-          }}
-        >
-          {ui.message}
+      {/* MOBILE */}
+      {isMobile ? (
+        <div style={{ display: "grid", gap: 12 }}>
+          {filtered.map((p) => (
+            <PaymentCard key={p.id} payment={p} />
+          ))}
         </div>
-      )}
+      ) : (
+        <table style={{ width: "100%" }}>
+          <thead>
+            <tr>
+              <th>Arrendatario</th>
+              <th>Monto</th>
+              <th>Fecha</th>
+              <th>Detalle</th>
+            </tr>
+          </thead>
 
-      {ui.status === "success" && ui.data.length === 0 && (
-        <div
-          style={{
-            padding: 24,
-            borderRadius: 18,
-            background: "#ffffff",
-            border: "1px solid #e6e8ef",
-            color: "#64748b",
-          }}
-        >
-          No hay pagos de inquilinos registrados todavía.
-        </div>
-      )}
+          <tbody>
+            {filtered.map((p) => {
+              const isExpanded = expandedId === p.id;
 
-      {ui.status === "success" && ui.data.length > 0 && (
-        <div
-          style={{
-            borderRadius: 18,
-            background: "#ffffff",
-            border: "1px solid #e6e8ef",
-            boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
-            overflow: "hidden",
-          }}
-        >
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead style={{ background: "#f8fafc" }}>
-                <tr>
-                  <th style={th}>Fecha</th>
-                  <th style={th}>Inquilino</th>
-                  <th style={th}>Contrato</th>
-                  <th style={th}>Factura</th>
-                  <th style={th}>Pagado</th>
-                  <th style={th}>Estado</th>
-                  <th style={th}>Canal</th>
-                  <th style={th}>Referencia</th>
-                </tr>
-              </thead>
+              return (
+                <>
+                  <tr key={p.id}>
+                    <td>
+                      <b>{p.tenantName}</b>
+                      <div style={{ fontSize: 12 }}>{p.tenantEmail}</div>
+                    </td>
+                    <td>{formatCLP(p.amount)}</td>
+                    <td>{formatDate(p.createdAt)}</td>
+                    <td>
+                      <button
+                        onClick={() =>
+                          setExpandedId((prev) =>
+                            prev === p.id ? null : p.id
+                          )
+                        }
+                      >
+                        {isExpanded ? "↑" : "↓"}
+                      </button>
+                    </td>
+                  </tr>
 
-              <tbody>
-                {ui.data.map((payment) => {
-                  const hasInvoice = !!payment.invoice;
-                  const total = payment.invoice?.total ?? 0;
-                  const paid = hasInvoice ? Math.min(payment.amount, total) : payment.amount;
-                  const pending = hasInvoice ? Math.max(total - paid, 0) : 0;
-                  const percent = hasInvoice && total > 0 ? Math.round((paid / total) * 100) : null;
-
-                  const progressColor =
-                    payment.status === "applied"
-                      ? "#16a34a"
-                      : payment.status === "partial_applied"
-                      ? "#f59e0b"
-                      : payment.status === "overpayment"
-                      ? "#7c3aed"
-                      : "#9ca3af";
-
-                  return (
-                    <tr key={payment.id}>
-                      <td style={td}>
-                        {formatDateTime(payment.paidAt ?? payment.createdAt)}
+                  {isExpanded && (
+                    <tr>
+                      <td colSpan={4}>
+                        <PaymentDetail payment={p} />
                       </td>
-
-                      <td style={td}>
-                        <div style={{ fontWeight: 700 }}>
-                          {payment.tenant?.name ?? "—"}
-                        </div>
-                        <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
-                          {payment.tenant?.email ?? "Sin email"}
-                        </div>
-                      </td>
-
-                      <td style={td}>
-                        {payment.subscription?.tenantName ?? "—"}
-                      </td>
-
-                      <td style={td}>
-                        {hasInvoice ? (
-                          <div style={{ minWidth: 170 }}>
-                            <div style={{ fontWeight: 700 }}>
-                              {formatCLP(total)}
-                            </div>
-
-                            <div
-                              style={{
-                                marginTop: 6,
-                                height: 6,
-                                borderRadius: 999,
-                                background: "#e5e7eb",
-                                overflow: "hidden",
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: `${percent ?? 0}%`,
-                                  height: "100%",
-                                  background: progressColor,
-                                }}
-                              />
-                            </div>
-
-                           <div
-                          style={{
-                            fontSize: 12,
-                            color: payment.status === "overpayment" ? "#7c3aed" : "#64748b",
-                            marginTop: 6,
-                            fontWeight: payment.status === "overpayment" ? 700 : 500,
-                          }}
-                        >
-                          {payment.status === "overpayment"
-                            ? `Sobregiro ${formatCLP(payment.amount - total)}`
-                            : `Pendiente: ${formatCLP(pending)}`}
-                        </div>
-                          </div>
-                        ) : (
-                          "Sin invoice"
-                        )}
-                      </td>
-
-                      <td style={td}>
-                        {hasInvoice && percent != null ? (
-                          <div style={{ fontWeight: 700 }}>
-                            {formatCLP(payment.amount)} ({percent}%)
-                          </div>
-                        ) : (
-                          <div style={{ fontWeight: 700 }}>
-                            {formatCLP(payment.amount)}
-                          </div>
-                        )}
-                      </td>
-
-                      <td style={td}>
-                        <StatusBadge status={payment.status} />
-                      </td>
-
-                      <td style={td}>{payment.channel || "—"}</td>
-
-                      <td style={td}>{payment.reference || "—"}</td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                  )}
+                </>
+              );
+            })}
+          </tbody>
+        </table>
       )}
     </div>
   );

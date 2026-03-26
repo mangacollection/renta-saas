@@ -1,9 +1,11 @@
-import { useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   activateSubscription,
   addSubscriptionItem,
   createSubscription,
+  deleteSubscriptionItem,
+  getSubscriptions,
 } from "./subscriptions.api";
 import { ItemsEditor, type DraftItem } from "./components/ItemsEditor";
 
@@ -12,20 +14,40 @@ function normalizeError(err: any): string {
   return Array.isArray(msg) ? msg.join("\n") : String(msg);
 }
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth < 768 : false
+  );
+
+  useEffect(() => {
+    function handleResize() {
+      setIsMobile(window.innerWidth < 768);
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return isMobile;
+}
+
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  padding: "10px 12px",
-  borderRadius: 10,
+  padding: "12px 14px",
+  borderRadius: 16,
   border: "1px solid #d7dbe6",
   background: "#ffffff",
   color: "#0f172a",
   outline: "none",
+  fontSize: 14,
+  boxSizing: "border-box",
 };
 
 const labelStyle: React.CSSProperties = {
   fontSize: 12,
   fontWeight: 700,
-  color: "#334155",
+  color: "#64748b",
+  letterSpacing: 0.2,
 };
 
 function ButtonPrimary(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
@@ -33,14 +55,16 @@ function ButtonPrimary(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
     <button
       {...props}
       style={{
-        padding: "10px 14px",
-        borderRadius: 12,
+        padding: "11px 16px",
+        borderRadius: 999,
         border: "1px solid #6d5efc",
         background: "#6d5efc",
         color: "#ffffff",
-        fontWeight: 800,
+        fontWeight: 700,
         cursor: props.disabled ? "not-allowed" : "pointer",
         opacity: props.disabled ? 0.6 : 1,
+        boxShadow: props.disabled ? "none" : "0 8px 20px rgba(109,94,252,0.18)",
+        transition: "all 0.15s ease",
         ...props.style,
       }}
     />
@@ -53,13 +77,14 @@ function ButtonSoft(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
       {...props}
       style={{
         padding: "10px 14px",
-        borderRadius: 12,
-        border: "1px solid #d7dbe6",
+        borderRadius: 999,
+        border: "1px solid #e6eaf2",
         background: "#ffffff",
-        color: "#0f172a",
-        fontWeight: 800,
+        color: "#334155",
+        fontWeight: 600,
         cursor: props.disabled ? "not-allowed" : "pointer",
         opacity: props.disabled ? 0.6 : 1,
+        transition: "all 0.15s ease",
         ...props.style,
       }}
     />
@@ -75,32 +100,224 @@ function Section(props: {
   return (
     <section
       style={{
-        border: "1px solid #e6e8ef",
+        border: "1px solid #eef2f7",
         background: "#ffffff",
-        borderRadius: 16,
-        padding: 16,
-        opacity: props.disabled ? 0.6 : 1,
-        boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+        borderRadius: 20,
+        padding: 18,
+        opacity: props.disabled ? 0.65 : 1,
+        boxShadow: "0 8px 24px rgba(15,23,42,0.04)",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-        <div>
-          <div style={{ fontWeight: 900, color: "#0f172a" }}>{props.title}</div>
-          {props.hint && (
-            <div style={{ marginTop: 4, fontSize: 13, color: "#64748b" }}>
-              {props.hint}
-            </div>
-          )}
+      <div>
+        <div
+          style={{
+            fontWeight: 700,
+            color: "#0f172a",
+            fontSize: 17,
+            letterSpacing: "-0.02em",
+          }}
+        >
+          {props.title}
         </div>
+        {props.hint && (
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 13,
+              color: "#64748b",
+              lineHeight: 1.5,
+              fontWeight: 500,
+            }}
+          >
+            {props.hint}
+          </div>
+        )}
       </div>
 
-      <div style={{ marginTop: 14 }}>{props.children}</div>
+      <div style={{ marginTop: 16 }}>{props.children}</div>
     </section>
+  );
+}
+
+function SuccessNotice({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: "12px 14px",
+        borderRadius: 14,
+        background: "#f0fdf4",
+        border: "1px solid #bbf7d0",
+        color: "#166534",
+        fontSize: 13,
+        fontWeight: 700,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function InfoNotice({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: "12px 14px",
+        borderRadius: 14,
+        background: "#eff6ff",
+        border: "1px solid #bfdbfe",
+        color: "#1d4ed8",
+        fontSize: 13,
+        fontWeight: 700,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function WarningNotice({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: "12px 14px",
+        borderRadius: 14,
+        background: "#fff7ed",
+        border: "1px solid #fed7aa",
+        color: "#9a3412",
+        fontSize: 13,
+        fontWeight: 700,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ContractStatusBadge({
+  status,
+}: {
+  status: "draft" | "ready" | "active";
+}) {
+  const config =
+    status === "active"
+      ? {
+          label: "Activo",
+          background: "#dbeafe",
+          color: "#1d4ed8",
+          border: "#bfdbfe",
+        }
+      : status === "ready"
+      ? {
+          label: "Listo",
+          background: "#f0fdf4",
+          color: "#166534",
+          border: "#bbf7d0",
+        }
+      : {
+          label: "Borrador",
+          background: "#fef3c7",
+          color: "#92400e",
+          border: "#fde68a",
+        };
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "7px 12px",
+        borderRadius: 999,
+        background: config.background,
+        color: config.color,
+        border: `1px solid ${config.border}`,
+        fontWeight: 700,
+        fontSize: 12,
+      }}
+    >
+      {config.label}
+    </span>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  active = false,
+}: {
+  label: string;
+  value: React.ReactNode;
+  active?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        padding: 14,
+        borderRadius: 18,
+        background: active
+          ? "linear-gradient(180deg, rgba(109,94,252,0.12) 0%, rgba(109,94,252,0.08) 100%)"
+          : "#ffffff",
+        border: active ? "1px solid rgba(109,94,252,0.24)" : "1px solid #eef2f7",
+        boxShadow: active
+          ? "0 14px 30px rgba(109,94,252,0.10)"
+          : "0 8px 24px rgba(15,23,42,0.04)",
+      }}
+    >
+      <div style={{ fontSize: 12, color: active ? "#5b4ee6" : "#64748b", fontWeight: 700 }}>
+        {label}
+      </div>
+      <div
+        style={{
+          marginTop: 6,
+          fontWeight: 800,
+          color: "#0f172a",
+          fontSize: 18,
+          letterSpacing: "-0.02em",
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function DetailToggle({
+  expanded,
+  onClick,
+  label,
+}: {
+  expanded: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        border: "none",
+        background: "transparent",
+        color: "#5b4ee6",
+        fontWeight: 700,
+        cursor: "pointer",
+        padding: 0,
+      }}
+    >
+      <span>{expanded ? "Ocultar detalle ↑" : `${label} ↓`}</span>
+    </button>
   );
 }
 
 export function SubscriptionCreatePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const subscriptionIdFromQuery = searchParams.get("subscriptionId");
+  const isMobile = useIsMobile();
 
   const [tenantName, setTenantName] = useState("");
   const [tenantRut, setTenantRut] = useState("");
@@ -108,7 +325,9 @@ export function SubscriptionCreatePage() {
   const [tenantPhone, setTenantPhone] = useState("");
   const [billingDay, setBillingDay] = useState("5");
 
-  const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
+  const [subscriptionId, setSubscriptionId] = useState<string | null>(
+    subscriptionIdFromQuery
+  );
 
   const [items, setItems] = useState<DraftItem[]>([]);
   const [savedItemIds, setSavedItemIds] = useState<string[]>([]);
@@ -116,19 +335,84 @@ export function SubscriptionCreatePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [itemsSuccess, setItemsSuccess] = useState<string | null>(null);
+  const [itemsInfo, setItemsInfo] = useState<string | null>(null);
+  const [itemsError, setItemsError] = useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+
+  const [tenantExpanded, setTenantExpanded] = useState(!subscriptionIdFromQuery);
+
   const isSavingItemsRef = useRef(false);
 
   const step1Done = !!subscriptionId;
   const step2Done = savedItemIds.length > 0;
 
   const itemsTotal = useMemo(() => {
-    return items.reduce((sum, i) => sum + (parseInt(i.amount || "0", 10) || 0), 0);
+    return items.reduce(
+      (sum, i) => sum + (parseInt(i.amount || "0", 10) || 0),
+      0
+    );
   }, [items]);
+
+  useEffect(() => {
+    async function loadDraft() {
+      if (!subscriptionIdFromQuery) return;
+
+      try {
+        setLoading(true);
+        setError(null);
+        setItemsSuccess(null);
+        setItemsInfo(null);
+        setItemsError(null);
+        setCreateSuccess(null);
+
+        const subs = await getSubscriptions();
+        const current = subs.find((s) => s.id === subscriptionIdFromQuery);
+
+        if (!current) {
+          setError("No se encontró el borrador.");
+          return;
+        }
+
+        setTenantName(current.tenantName ?? "");
+        setTenantRut(current.tenantRut ?? "");
+        setTenantEmail(current.tenantEmail ?? "");
+        setTenantPhone(current.tenantPhone ?? "");
+        setBillingDay(String(current.billingDay ?? 5));
+        setSubscriptionId(current.id);
+        setTenantExpanded(false);
+
+        const existingItems: DraftItem[] = (current.items ?? []).map((it) => ({
+          clientId: it.id,
+          id: it.id,
+          type: it.type,
+          name: it.name,
+          amount: String(it.amount),
+        }));
+
+        setItems(existingItems);
+        setSavedItemIds((current.items ?? []).map((it) => it.id));
+      } catch (e: any) {
+        setError(normalizeError(e));
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadDraft();
+  }, [subscriptionIdFromQuery]);
+
+  useEffect(() => {
+    if (step1Done) {
+      setTenantExpanded(false);
+    }
+  }, [step1Done]);
 
   async function onCreate() {
     if (loading) return;
 
     setError(null);
+    setCreateSuccess(null);
 
     if (!tenantName.trim()) {
       setError("El nombre del arrendatario es obligatorio.");
@@ -150,6 +434,50 @@ export function SubscriptionCreatePage() {
         billingDay: day,
       });
       setSubscriptionId(sub.id);
+      setCreateSuccess("Datos guardados. Ahora agrega los cargos.");
+      setTenantExpanded(false);
+    } catch (e: any) {
+      setError(normalizeError(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleItemsChange(nextItems: DraftItem[]) {
+    if (!subscriptionId) {
+      setItems(nextItems);
+      return;
+    }
+
+    const removedSavedItems = items.filter(
+      (current) =>
+        current.id &&
+        !nextItems.some((next) => next.clientId === current.clientId)
+    );
+
+    if (removedSavedItems.length === 0) {
+      setItems(nextItems);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      setItemsSuccess(null);
+      setItemsInfo(null);
+      setItemsError(null);
+
+      for (const item of removedSavedItems) {
+        if (item.id) {
+          await deleteSubscriptionItem(item.id);
+        }
+      }
+
+      setSavedItemIds((prev) =>
+        prev.filter((id) => !removedSavedItems.some((item) => item.id === id))
+      );
+      setItems(nextItems);
+      setItemsSuccess("Cargo eliminado correctamente.");
     } catch (e: any) {
       setError(normalizeError(e));
     } finally {
@@ -161,26 +489,29 @@ export function SubscriptionCreatePage() {
     if (loading || isSavingItemsRef.current) return;
 
     setError(null);
+    setItemsSuccess(null);
+    setItemsInfo(null);
+    setItemsError(null);
 
     if (!subscriptionId) {
-      setError("Primero crea el arriendo.");
+      setError("Primero guarda los datos del arrendatario.");
       return;
     }
 
     if (!items.length) {
-      setError("Agrega al menos un item.");
+      setItemsError("Agrega al menos un cargo antes de guardar.");
       return;
     }
 
     for (const it of items) {
       if (!it.name.trim()) {
-        setError("Todos los items deben tener nombre.");
+        setItemsError("Todos los cargos deben tener un concepto.");
         return;
       }
 
       const amount = parseInt(it.amount || "0", 10);
       if (!Number.isFinite(amount) || amount <= 0) {
-        setError("Todos los items deben tener monto > 0.");
+        setItemsError("Hay cargos con monto inválido. Ingresa valores mayores a 0.");
         return;
       }
     }
@@ -188,10 +519,13 @@ export function SubscriptionCreatePage() {
     try {
       isSavingItemsRef.current = true;
       setLoading(true);
+      setItemsInfo("Guardando cargos...");
 
       const createdIds: string[] = [];
 
       for (const it of items) {
+        if (it.id) continue;
+
         const created = await addSubscriptionItem({
           subscriptionId,
           type: it.type,
@@ -201,11 +535,37 @@ export function SubscriptionCreatePage() {
         createdIds.push(created.id);
       }
 
-      setSavedItemIds(createdIds);
+      setSavedItemIds((prev) => [...prev, ...createdIds]);
+
+      if (createdIds.length > 0) {
+        setItems((prev) => {
+          const next = [...prev];
+          let createdIndex = 0;
+
+          for (let i = 0; i < next.length; i++) {
+            if (!next[i].id && createdIndex < createdIds.length) {
+              next[i] = {
+                ...next[i],
+                id: createdIds[createdIndex],
+              };
+              createdIndex += 1;
+            }
+          }
+
+          return next;
+        });
+      }
+
+      setItemsSuccess(
+        createdIds.length > 0
+          ? "Cargos guardados correctamente."
+          : "No había cargos nuevos para guardar."
+      );
     } catch (e: any) {
       setError(normalizeError(e));
     } finally {
       setLoading(false);
+      setItemsInfo(null);
       isSavingItemsRef.current = false;
     }
   }
@@ -216,19 +576,19 @@ export function SubscriptionCreatePage() {
     setError(null);
 
     if (!subscriptionId) {
-      setError("Primero crea el arriendo.");
+      setError("Primero guarda los datos del arrendatario.");
       return;
     }
 
     if (!step2Done) {
-      setError("Primero guarda al menos un item.");
+      setError("Primero guarda al menos un cargo.");
       return;
     }
 
     try {
       setLoading(true);
       await activateSubscription({ subscriptionId });
-      navigate("/invoices");
+      navigate("/");
     } catch (e: any) {
       setError(normalizeError(e));
     } finally {
@@ -236,50 +596,82 @@ export function SubscriptionCreatePage() {
     }
   }
 
+  const isEditingDraft = !!subscriptionIdFromQuery;
+  const contractStatus: "draft" | "ready" = step2Done ? "ready" : "draft";
+
   return (
-    <div style={{ padding: 24, fontFamily: "system-ui", maxWidth: 980, margin: "0 auto" }}>
-      <header
+    <div
+      style={{
+        padding: 8,
+        fontFamily: "Inter, system-ui, sans-serif",
+        maxWidth: 980,
+        margin: "0 auto",
+      }}
+    >
+      <section
         style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "flex-start",
+          alignItems: "center",
           gap: 16,
-          padding: 18,
-          borderRadius: 18,
+          padding: isMobile ? 16 : 18,
+          borderRadius: 24,
           background: "#ffffff",
-          border: "1px solid #e6e8ef",
-          boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+          border: "1px solid #eef2f7",
+          boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
+          flexDirection: isMobile ? "column" : "row",
         }}
       >
-        <div>
-          <h2 style={{ margin: 0, color: "#0f172a" }}>Nuevo arriendo</h2>
-          <div style={{ marginTop: 6, color: "#64748b", fontSize: 14 }}>
-            Datos → Propiedades → Activar
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              color: "#64748b",
+              fontSize: 14,
+              lineHeight: 1.5,
+              maxWidth: 560,
+            }}
+          >
+            {isEditingDraft
+              ? "Completa el borrador, agrega los cargos y déjalo listo para activar."
+              : "Crea el contrato, agrega los cargos mensuales y actívalo cuando esté listo."}
           </div>
+
+          {createSuccess && <SuccessNotice>{createSuccess}</SuccessNotice>}
         </div>
 
-        <Link
-          to="/"
-          style={{
-            color: "#0f172a",
-            fontWeight: 800,
-            textDecoration: "none",
-            padding: "10px 12px",
-            borderRadius: 12,
-            border: "1px solid #d7dbe6",
-            background: "#ffffff",
-          }}
-        >
-          ← Volver
-        </Link>
-      </header>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <ContractStatusBadge status={contractStatus} />
+        </div>
+      </section>
+
+      <div
+        style={{
+          marginTop: 16,
+          display: "grid",
+          gridTemplateColumns: isMobile
+            ? "repeat(2, minmax(0, 1fr))"
+            : "repeat(4, minmax(0, 1fr))",
+          gap: 12,
+        }}
+      >
+        <StatCard label="Estado" value={contractStatus === "ready" ? "Listo" : "Borrador"} active />
+        <StatCard
+          label="Cargos"
+          value={`${items.length} ${items.length === 1 ? "item" : "items"}`}
+        />
+        <StatCard
+          label="Total estimado"
+          value={`${itemsTotal.toLocaleString("es-CL")} CLP`}
+        />
+        <StatCard label="Cobro" value={`Día ${billingDay || "5"}`} />
+      </div>
 
       {error && (
         <div
           style={{
             marginTop: 14,
             padding: 12,
-            borderRadius: 12,
+            borderRadius: 14,
             border: "1px solid #fecaca",
             background: "#fff1f2",
             color: "#991b1b",
@@ -293,128 +685,233 @@ export function SubscriptionCreatePage() {
 
       <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
         <Section
-          title={`1) Datos${step1Done ? " ✅" : ""}`}
-          hint="Arrendatario y día de cobro."
-          disabled={false}
+          title="Arrendatario"
+          hint="Define quién arrienda y el día de cobro mensual."
         >
-          <div style={{ display: "grid", gap: 12 }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label style={labelStyle}>Nombre arrendatario</label>
-              <input
-                value={tenantName}
-                onChange={(e) => setTenantName(e.target.value)}
-                disabled={loading || step1Done}
-                placeholder="Ej: Juan Pérez"
-                style={inputStyle}
-              />
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 12,
+              alignItems: "center",
+              flexWrap: "wrap",
+              marginBottom: tenantExpanded ? 14 : 0,
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 700, color: "#0f172a" }}>
+                {tenantName || "Nuevo arrendatario"}
+              </div>
+              <div style={{ marginTop: 4, fontSize: 13, color: "#64748b" }}>
+                {tenantEmail || "Sin email"} • Día {billingDay || "5"}
+              </div>
             </div>
 
-            <div style={{ display: "grid", gap: 6 }}>
-              <label style={labelStyle}>RUT (opcional)</label>
-              <input
-                value={tenantRut}
-                onChange={(e) => setTenantRut(e.target.value)}
-                disabled={loading || step1Done}
-                placeholder="Ej: 12.345.678-9"
-                style={inputStyle}
-              />
-            </div>
-
-            <div style={{ display: "grid", gap: 6 }}>
-              <label style={labelStyle}>Email (opcional)</label>
-              <input
-                value={tenantEmail}
-                onChange={(e) => setTenantEmail(e.target.value)}
-                disabled={loading || step1Done}
-                placeholder="Ej: juan@email.com"
-                style={inputStyle}
-              />
-            </div>
-
-            <div style={{ display: "grid", gap: 6 }}>
-              <label style={labelStyle}>Teléfono (opcional)</label>
-              <input
-                value={tenantPhone}
-                onChange={(e) => setTenantPhone(e.target.value)}
-                disabled={loading || step1Done}
-                placeholder="Ej: +56912345678"
-                style={inputStyle}
-              />
-            </div>
-
-            <div style={{ display: "grid", gap: 6, maxWidth: 220 }}>
-              <label style={labelStyle}>Día de cobro (1–28)</label>
-              <input
-                value={billingDay}
-                onChange={(e) => setBillingDay(e.target.value.replace(/[^\d]/g, ""))}
-                disabled={loading || step1Done}
-                style={inputStyle}
-                inputMode="numeric"
-              />
-            </div>
-
-            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <ButtonPrimary onClick={onCreate} disabled={loading || step1Done}>
-                {step1Done ? "Arriendo creado" : loading ? "Creando..." : "Crear arriendo"}
-              </ButtonPrimary>
-
-              {subscriptionId && (
-                <span style={{ color: "#64748b", fontSize: 13 }}>
-                  ID: <code>{subscriptionId}</code>
-                </span>
-              )}
-            </div>
+            <DetailToggle
+              expanded={tenantExpanded}
+              onClick={() => setTenantExpanded((prev) => !prev)}
+              label="Ver detalle"
+            />
           </div>
+
+          {tenantExpanded && (
+            <div style={{ display: "grid", gap: 12 }}>
+              <div style={{ display: "grid", gap: 6 }}>
+                <label style={labelStyle}>Nombre arrendatario</label>
+                <input
+                  value={tenantName}
+                  onChange={(e) => setTenantName(e.target.value)}
+                  disabled={loading || step1Done}
+                  placeholder="Ej: Juan Pérez"
+                  style={inputStyle}
+                />
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: "grid", gap: 6 }}>
+                  <label style={labelStyle}>RUT (opcional)</label>
+                  <input
+                    value={tenantRut}
+                    onChange={(e) => setTenantRut(e.target.value)}
+                    disabled={loading || step1Done}
+                    placeholder="Ej: 12.345.678-9"
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gap: 6 }}>
+                  <label style={labelStyle}>Email (opcional)</label>
+                  <input
+                    value={tenantEmail}
+                    onChange={(e) => setTenantEmail(e.target.value)}
+                    disabled={loading || step1Done}
+                    placeholder="Ej: juan@email.com"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 220px",
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: "grid", gap: 6 }}>
+                  <label style={labelStyle}>Teléfono (opcional)</label>
+                  <input
+                    value={tenantPhone}
+                    onChange={(e) => setTenantPhone(e.target.value)}
+                    disabled={loading || step1Done}
+                    placeholder="Ej: +56912345678"
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gap: 6 }}>
+                  <label style={labelStyle}>Día de cobro (1–28)</label>
+                  <input
+                    value={billingDay}
+                    onChange={(e) =>
+                      setBillingDay(e.target.value.replace(/[^\d]/g, ""))
+                    }
+                    disabled={loading || step1Done}
+                    style={inputStyle}
+                    inputMode="numeric"
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <ButtonPrimary onClick={onCreate} disabled={loading || step1Done}>
+                  {step1Done
+                    ? "Datos guardados"
+                    : loading
+                    ? "Guardando..."
+                    : "Guardar datos"}
+                </ButtonPrimary>
+
+                {subscriptionId && (
+                  <span style={{ color: "#94a3b8", fontSize: 13 }}>
+                    ID: <code>{subscriptionId}</code>
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </Section>
 
         <Section
-          title={`2) Propiedades${step2Done ? " ✅" : ""}`}
-          hint="Agrega cargos del arriendo y guárdalos."
-          disabled={!subscriptionId}
+          title="Cargos"
+          hint="Agrega los conceptos que se cobrarán cada mes."
         >
-          <ItemsEditor value={items} onChange={setItems} disabled={loading || !subscriptionId} />
+              <ItemsEditor
+          value={items}
+          onChange={handleItemsChange}
+          disabled={loading}
+        />
+
+          {!subscriptionId && (
+            <InfoNotice>
+              Puedes preparar los cargos desde ya. Para guardarlos, primero guarda los datos del arrendatario.
+            </InfoNotice>
+          )}
+
+          {itemsInfo && <InfoNotice>{itemsInfo}</InfoNotice>}
+          {itemsSuccess && !loading && <SuccessNotice>{itemsSuccess}</SuccessNotice>}
+          {itemsError && <WarningNotice>{itemsError}</WarningNotice>}
 
           <div
             style={{
-              marginTop: 12,
+              marginTop: 14,
+              padding: 14,
+              borderRadius: 16,
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
               display: "flex",
               justifyContent: "space-between",
               gap: 12,
               flexWrap: "wrap",
+              alignItems: "center",
             }}
           >
-            <div style={{ fontWeight: 800, color: "#0f172a" }}>
-              Total estimado: {itemsTotal.toLocaleString("es-CL")} CLP
+            <div>
+              <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>
+                Total estimado del contrato
+              </div>
+              <div
+                style={{
+                  marginTop: 4,
+                  fontWeight: 800,
+                  color: "#0f172a",
+                  fontSize: 18,
+                }}
+              >
+                {itemsTotal.toLocaleString("es-CL")} CLP
+              </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10 }}>
-              <ButtonSoft onClick={() => setItems([])} disabled={loading || !subscriptionId}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <ButtonSoft disabled title="Próximamente">
                 Limpiar
               </ButtonSoft>
 
               <ButtonPrimary
                 onClick={onSaveItems}
-                disabled={loading || !subscriptionId || items.length === 0 || step2Done}
+                disabled={loading || !subscriptionId || items.length === 0}
               >
-                {step2Done ? "Items guardados" : loading ? "Guardando..." : "Guardar items"}
+                {loading ? "Guardando..." : "Guardar cargos"}
               </ButtonPrimary>
             </div>
           </div>
         </Section>
 
         <Section
-          title="3) Activar"
-          hint="Deja el arriendo listo y luego revisa cobros."
+          title="Activación"
+          hint="Activa el contrato cuando ya tenga datos y cargos guardados."
           disabled={!subscriptionId || !step2Done}
         >
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <ButtonPrimary onClick={onActivate} disabled={loading || !subscriptionId || !step2Done}>
-              {loading ? "Activando..." : "Activar arriendo"}
-            </ButtonPrimary>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              alignItems: "flex-start",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 14,
+                color: "#334155",
+                lineHeight: 1.5,
+              }}
+            >
+              {step2Done ? (
+                <>Todo listo. Puedes activar el contrato y comenzar a cobrar automáticamente.</>
+              ) : (
+                <>Agrega y guarda al menos un cargo antes de activar el contrato.</>
+              )}
+            </div>
 
-            <ButtonSoft onClick={() => navigate("/invoices")} disabled={loading}>
-              Ver cobros/facturas
-            </ButtonSoft>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <ButtonPrimary
+                onClick={onActivate}
+                disabled={loading || !subscriptionId || !step2Done}
+              >
+                {loading ? "Activando..." : "Activar contrato"}
+              </ButtonPrimary>
+
+              <ButtonSoft onClick={() => navigate("/")} disabled={loading}>
+                Volver a contratos
+              </ButtonSoft>
+            </div>
           </div>
         </Section>
       </div>

@@ -32,3 +32,21 @@ export async function activateSubscription(input: {
   const res = await api.patch<Subscription>("/subscriptions/activate", input);
   return res.data;
 }
+export async function updateSubscriptionItem(
+  itemId: string,
+  input: {
+    name?: string;
+    amount?: number;
+  }
+): Promise<SubscriptionItem> {
+  const res = await api.patch<SubscriptionItem>(
+    `/subscriptions/items/${itemId}`,
+    input
+  );
+  return res.data;
+}
+export async function deleteSubscriptionItem(
+  itemId: string
+): Promise<void> {
+  await api.delete(`/subscriptions/items/${itemId}`);
+}
