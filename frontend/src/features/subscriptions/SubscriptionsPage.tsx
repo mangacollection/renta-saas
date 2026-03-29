@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
 import { getSubscriptions } from "./subscriptions.api";
@@ -681,46 +681,63 @@ export function SubscriptionsPage() {
         </div>
       )}
 
-      {stats && (
-        <div
-          style={{
-            marginTop: 14,
-            marginBottom: 2,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <span
+            {stats && (
+          <div
             style={{
-              fontSize: 12,
-              fontWeight: 700,
-              color: "#64748b",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-            }}
-          >
-            Vista actual
-          </span>
-
-          <span
-            style={{
-              display: "inline-flex",
+              marginTop: 14,
+              marginBottom: 2,
+              display: "flex",
               alignItems: "center",
-              padding: "8px 12px",
-              borderRadius: 999,
-              background: "rgba(109,94,252,0.10)",
-              color: "#5b4ee6",
-              fontSize: 13,
-              fontWeight: 700,
-              border: "1px solid rgba(109,94,252,0.18)",
+              gap: 8,
+              flexWrap: "wrap",
             }}
           >
-            {currentViewLabel}
-          </span>
-        </div>
-      )}
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#64748b",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              Vista actual
+            </span>
+
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "8px 12px",
+                borderRadius: 999,
+                background: "rgba(109,94,252,0.10)",
+                color: "#5b4ee6",
+                fontSize: 13,
+                fontWeight: 700,
+                border: "1px solid rgba(109,94,252,0.18)",
+              }}
+            >
+              {currentViewLabel}
+            </span>
+          </div>
+        )}
+
+        {currentView === "active" && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: "12px 16px",
+              borderRadius: 16,
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              color: "#475569",
+              fontSize: 13,
+              lineHeight: 1.5,
+            }}
+          >
+            Los contratos activos ya no se editan como borrador.
+          </div>
+        )}
 
       {stats && (
         <div
@@ -863,8 +880,8 @@ export function SubscriptionsPage() {
                     const hasItems = items.length > 0;
 
                     return (
-                      <>
-                        <tr key={s.id}>
+                      <Fragment key={s.id}>
+                        <tr>
                           <td style={td}>
                             <div style={{ fontWeight: 700, color: "#0f172a" }}>
                               {s.tenantName}
@@ -953,7 +970,7 @@ export function SubscriptionsPage() {
                         </tr>
 
                         {hasItems && isExpanded && (
-                          <tr key={`${s.id}-detail`}>
+                          <tr>
                             <td
                               colSpan={7}
                               style={{
@@ -965,7 +982,7 @@ export function SubscriptionsPage() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     );
                   })}
                 </tbody>

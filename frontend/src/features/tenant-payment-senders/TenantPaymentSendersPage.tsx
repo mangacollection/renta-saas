@@ -166,11 +166,12 @@ function SenderCard({
   editingId,
   editingEmail,
   editingBank,
+  editError,
   setEditingEmail,
   setEditingBank,
   startEdit,
   saveEdit,
-  setEditingId,
+  cancelEdit,
   onDelete,
   saving,
   deletingId,
@@ -180,11 +181,12 @@ function SenderCard({
   editingId: string | null;
   editingEmail: string;
   editingBank: string;
+  editError: string | null;
   setEditingEmail: (value: string) => void;
   setEditingBank: (value: string) => void;
   startEdit: (sender: TenantPaymentSender) => void;
   saveEdit: (id: string) => Promise<void>;
-  setEditingId: (id: string | null) => void;
+  cancelEdit: () => void;
   onDelete: (sender: TenantPaymentSender) => Promise<void>;
   saving: boolean;
   deletingId: string | null;
@@ -245,6 +247,17 @@ function SenderCard({
               style={inputStyle}
               disabled={saving}
             />
+            {editError && (
+              <div
+                style={{
+                  color: "#dc2626",
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+              >
+                {editError}
+              </div>
+            )}
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>
@@ -267,11 +280,7 @@ function SenderCard({
               Guardar
             </PrimaryButton>
 
-            <ButtonSoft
-              type="button"
-              onClick={() => setEditingId(null)}
-              disabled={saving}
-            >
+            <ButtonSoft type="button" onClick={cancelEdit} disabled={saving}>
               Cancelar
             </ButtonSoft>
           </div>
@@ -377,6 +386,7 @@ export default function TenantPaymentSendersPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   async function loadSubscriptions() {
@@ -450,6 +460,11 @@ export default function TenantPaymentSendersPage() {
       return;
     }
 
+    if (!email.includes("@")) {
+      setError("Ingresa un correo válido.");
+      return;
+    }
+
     try {
       setSaving(true);
 
@@ -463,6 +478,7 @@ export default function TenantPaymentSendersPage() {
       setTenantId("");
       setEmail("");
       setBank("");
+      setError(null);
 
       await loadSenders();
     } catch (err: any) {
@@ -477,15 +493,29 @@ export default function TenantPaymentSendersPage() {
     setEditingEmail(sender.email);
     setEditingBank(sender.bank || "");
     setError(null);
+    setEditError(null);
     setSuccess(null);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditingEmail("");
+    setEditingBank("");
+    setEditError(null);
   }
 
   async function saveEdit(id: string) {
     setError(null);
+    setEditError(null);
     setSuccess(null);
 
     if (!editingEmail.trim()) {
-      setError("El email no puede quedar vacío.");
+      setEditError("El email no puede quedar vacío.");
+      return;
+    }
+
+    if (!editingEmail.includes("@")) {
+      setEditError("Ingresa un correo válido.");
       return;
     }
 
@@ -497,17 +527,14 @@ export default function TenantPaymentSendersPage() {
         bank: editingBank.trim() || undefined,
       });
 
-      const email = editingEmail.trim();
-
-      if (!email.includes("@")) {
-        setError("Ingresa un correo válido.");
-        return;
-      }
       setEditingId(null);
+      setEditingEmail("");
+      setEditingBank("");
+      setEditError(null);
       setSuccess("Remitente actualizado correctamente.");
       await loadSenders();
     } catch (err: any) {
-      setError(normalizeError(err));
+      setEditError(normalizeError(err));
     } finally {
       setSaving(false);
     }
@@ -520,6 +547,7 @@ export default function TenantPaymentSendersPage() {
     try {
       setDeletingId(sender.id);
       setError(null);
+      setEditError(null);
       setSuccess(null);
 
       await deleteTenantPaymentSender(sender.id);
@@ -573,9 +601,7 @@ export default function TenantPaymentSendersPage() {
         style={{
           marginTop: 16,
           display: "grid",
-          gridTemplateColumns: isMobile
-            ? "repeat(2, minmax(0, 1fr))"
-            : "repeat(2, minmax(0, 1fr))",
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
           gap: 12,
         }}
       >
@@ -629,7 +655,10 @@ export default function TenantPaymentSendersPage() {
               <label style={labelStyle}>Contratista</label>
               <select
                 value={tenantId}
-                onChange={(e) => setTenantId(e.target.value)}
+                onChange={(e) => {
+                  setTenantId(e.target.value);
+                  if (error) setError(null);
+                }}
                 disabled={loadingSubs || saving}
                 style={inputStyle}
               >
@@ -648,17 +677,45 @@ export default function TenantPaymentSendersPage() {
                   </option>
                 ))}
               </select>
+
+              {error === "Debes seleccionar un contratista." && (
+                <div
+                  style={{
+                    color: "#dc2626",
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  {error}
+                </div>
+              )}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label style={labelStyle}>Correo banco</label>
               <input
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (error) setError(null);
+                }}
                 disabled={saving}
                 placeholder="Ej: notificaciones@banco.cl"
                 style={inputStyle}
               />
+
+              {error &&
+                error !== "Debes seleccionar un contratista." && (
+                  <div
+                    style={{
+                      color: "#dc2626",
+                      fontSize: 13,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {error}
+                  </div>
+                )}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -672,7 +729,7 @@ export default function TenantPaymentSendersPage() {
               />
             </div>
 
-            <div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <PrimaryButton
                 type="submit"
                 disabled={saving || loadingSubs || tenantOptions.length === 0}
@@ -680,6 +737,21 @@ export default function TenantPaymentSendersPage() {
               >
                 {saving ? "Guardando..." : "Guardar"}
               </PrimaryButton>
+
+              {(tenantId || email || bank) && (
+                <ButtonSoft
+                  type="button"
+                  disabled={saving}
+                  onClick={() => {
+                    setTenantId("");
+                    setEmail("");
+                    setBank("");
+                    setError(null);
+                  }}
+                >
+                  Cancelar
+                </ButtonSoft>
+              )}
             </div>
           </div>
         </form>
@@ -734,11 +806,15 @@ export default function TenantPaymentSendersPage() {
               editingId={editingId}
               editingEmail={editingEmail}
               editingBank={editingBank}
-              setEditingEmail={setEditingEmail}
+              editError={editingId === sender.id ? editError : null}
+              setEditingEmail={(value) => {
+                setEditingEmail(value);
+                if (editError) setEditError(null);
+              }}
               setEditingBank={setEditingBank}
               startEdit={startEdit}
               saveEdit={saveEdit}
-              setEditingId={setEditingId}
+              cancelEdit={cancelEdit}
               onDelete={onDelete}
               saving={saving}
               deletingId={deletingId}
@@ -774,33 +850,36 @@ export default function TenantPaymentSendersPage() {
                     </div>
                   </td>
 
-                            <td style={td}>
-                {editingId === sender.id ? (
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    <input
-                      value={editingEmail}
-                      onChange={(e) => setEditingEmail(e.target.value)}
-                      style={inputStyle}
-                      disabled={saving}
-                    />
+                  <td style={td}>
+                    {editingId === sender.id ? (
+                      <div style={{ display: "flex", flexDirection: "column" }}>
+                        <input
+                          value={editingEmail}
+                          onChange={(e) => {
+                            setEditingEmail(e.target.value);
+                            if (editError) setEditError(null);
+                          }}
+                          style={inputStyle}
+                          disabled={saving}
+                        />
 
-                    {error && (
-                      <div
-                        style={{
-                          marginTop: 6,
-                          color: "#dc2626",
-                          fontSize: 13,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {error}
+                        {editError && (
+                          <div
+                            style={{
+                              marginTop: 6,
+                              color: "#dc2626",
+                              fontSize: 13,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {editError}
+                          </div>
+                        )}
                       </div>
+                    ) : (
+                      sender.email
                     )}
-                  </div>
-                ) : (
-                  sender.email
-                )}
-              </td>
+                  </td>
 
                   <td style={td}>
                     {editingId === sender.id ? (
@@ -832,7 +911,7 @@ export default function TenantPaymentSendersPage() {
 
                         <ButtonSoft
                           type="button"
-                          onClick={() => setEditingId(null)}
+                          onClick={cancelEdit}
                           disabled={saving}
                           style={{ padding: "8px 12px" }}
                         >
