@@ -33,6 +33,7 @@ export type CreateSubscriptionInput = {
   tenantName: string;
   tenantRut?: string;
   tenantEmail?: string;
+  tenantPhone?: string;
   billingDay?: number;
   startDate?: string;
 };
