@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { getInvoices } from "./invoices.api";
 import { getSubscriptions } from "@/features/subscriptions/subscriptions.api";
 import type { Invoice } from "./invoices.types";
@@ -76,7 +76,13 @@ function normalizeError(err: any): string {
   return Array.isArray(msg) ? msg.join("\n") : String(msg);
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({
+  status,
+  dueDate,
+}: {
+  status: string;
+  dueDate?: string;
+}) {
   const s = status.toLowerCase();
 
   let bg = "#e5e7eb";
@@ -87,18 +93,39 @@ function StatusBadge({ status }: { status: string }) {
     bg = "#dcfce7";
     color = "#166534";
     label = "Pagado";
-  }
-
-  if (s === "pending") {
-    bg = "#fef3c7";
-    color = "#92400e";
-    label = "Pendiente de pago";
-  }
-
-  if (s === "failed") {
+  } else if (s === "failed") {
     bg = "#fee2e2";
     color = "#991b1b";
     label = "Fallida";
+  } else if (s === "pending") {
+    if (dueDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const due = new Date(dueDate);
+      due.setHours(0, 0, 0, 0);
+
+      const diffMs = due.getTime() - today.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+      if (diffDays < 0) {
+        bg = "#fee2e2";
+        color = "#991b1b";
+        label = "Pago vencido";
+      } else if (diffDays <= 5) {
+        bg = "#fef9c3";
+        color = "#854d0e";
+        label = "Próximo a vencer";
+      } else {
+        bg = "#fef3c7";
+        color = "#92400e";
+        label = "Pendiente";
+      }
+    } else {
+      bg = "#fef3c7";
+      color = "#92400e";
+      label = "Pendiente";
+    }
   }
 
   return (
@@ -107,15 +134,15 @@ function StatusBadge({ status }: { status: string }) {
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
+        gap: 6,
         padding: "6px 12px",
         borderRadius: 999,
         fontSize: 12,
         fontWeight: 700,
         background: bg,
         color,
-        minWidth: 95,
+        minWidth: 96,
         textAlign: "center",
-        border: "1px solid rgba(15,23,42,0.04)",
       }}
     >
       {label}
@@ -318,7 +345,7 @@ function InvoiceCard({
           </div>
         </div>
 
-        <StatusBadge status={invoice.status} />
+        <StatusBadge status={invoice.status} dueDate={invoice.dueDate} />
       </div>
 
       <div
@@ -866,8 +893,8 @@ export default function InvoicesPage() {
                     const hasItems = (inv.items ?? []).length > 0;
 
                     return (
-                      <>
-                        <tr key={inv.id}>
+                      <Fragment key={inv.id}>
+                        <tr>
                           <td style={td}>
                             <div style={{ fontWeight: 700 }}>{inv.tenantName}</div>
                             <div style={{ fontSize: 12, color: "#64748b" }}>
@@ -877,14 +904,19 @@ export default function InvoicesPage() {
                           </td>
 
                           <td style={td}>{formatPeriod(inv.period)}</td>
+
                           <td style={{ ...td, fontWeight: 700 }}>
                             {formatCLP(inv.total)}
                           </td>
+
                           <td style={td}>
-                            <StatusBadge status={inv.status} />
+                            <StatusBadge status={inv.status} dueDate={inv.dueDate} />
                           </td>
+
                           <td style={td}>{formatDateTime(inv.createdAt)}</td>
+
                           <td style={td}>{formatDate(inv.dueDate)}</td>
+
                           <td style={td}>
                             {hasItems ? (
                               <button
@@ -913,7 +945,7 @@ export default function InvoicesPage() {
                         </tr>
 
                         {hasItems && isExpanded && (
-                          <tr key={`${inv.id}-detail`}>
+                          <tr>
                             <td
                               colSpan={7}
                               style={{
@@ -925,7 +957,7 @@ export default function InvoicesPage() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     );
                   })}
                 </tbody>

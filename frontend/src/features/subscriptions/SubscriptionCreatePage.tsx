@@ -14,6 +14,91 @@ function normalizeError(err: any): string {
   return Array.isArray(msg) ? msg.join("\n") : String(msg);
 }
 
+function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function normalizePhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+
+  if (!digits) return "";
+
+  if (digits.startsWith("56")) {
+    return `+${digits.slice(0, 11)}`;
+  }
+
+  if (digits.startsWith("9")) {
+    return `+56${digits.slice(0, 9)}`;
+  }
+
+  return `+${digits.slice(0, 11)}`;
+}
+
+function isValidChileanPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return /^569\d{8}$/.test(digits);
+}
+
+function normalizeRut(value: string) {
+  const clean = value.replace(/\./g, "").replace(/-/g, "").toUpperCase();
+
+  if (!clean) return "";
+
+  if (clean.length === 1) return clean;
+
+  const body = clean.slice(0, -1).replace(/\D/g, "");
+  const dv = clean.slice(-1);
+
+  let formattedBody = "";
+  let count = 0;
+
+  for (let i = body.length - 1; i >= 0; i--) {
+    formattedBody = body[i] + formattedBody;
+    count++;
+
+    if (count === 3 && i !== 0) {
+      formattedBody = "." + formattedBody;
+      count = 0;
+    }
+  }
+
+  return `${formattedBody}-${dv}`;
+}
+
+function isValidRut(rut: string): boolean {
+  if (!rut) return false;
+
+  const clean = rut.replace(/\./g, "").replace(/-/g, "").toUpperCase();
+
+  if (clean.length < 2) return false;
+
+  const body = clean.slice(0, -1);
+  const dv = clean.slice(-1);
+
+  if (!/^\d+$/.test(body)) return false;
+
+  let sum = 0;
+  let multiplier = 2;
+
+  for (let i = body.length - 1; i >= 0; i--) {
+    sum += parseInt(body[i], 10) * multiplier;
+    multiplier = multiplier === 7 ? 2 : multiplier + 1;
+  }
+
+  const expected = 11 - (sum % 11);
+
+  let expectedDv = "";
+  if (expected === 11) expectedDv = "0";
+  else if (expected === 10) expectedDv = "K";
+  else expectedDv = String(expected);
+
+  return dv === expectedDv;
+}
+
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth < 768 : false
@@ -325,6 +410,10 @@ export function SubscriptionCreatePage() {
   const [tenantPhone, setTenantPhone] = useState("");
   const [billingDay, setBillingDay] = useState("5");
 
+  const [tenantRutError, setTenantRutError] = useState<string | null>(null);
+  const [tenantEmailError, setTenantEmailError] = useState<string | null>(null);
+  const [tenantPhoneError, setTenantPhoneError] = useState<string | null>(null);
+
   const [subscriptionId, setSubscriptionId] = useState<string | null>(
     subscriptionIdFromQuery
   );
@@ -413,6 +502,9 @@ export function SubscriptionCreatePage() {
 
     setError(null);
     setCreateSuccess(null);
+    setTenantRutError(null);
+    setTenantEmailError(null);
+    setTenantPhoneError(null);
 
     if (!tenantName.trim()) {
       setError("El nombre del arrendatario es obligatorio.");
@@ -425,15 +517,38 @@ export function SubscriptionCreatePage() {
       return;
     }
 
+    const normalizedEmail = normalizeEmail(tenantEmail);
+    const normalizedPhone = normalizePhone(tenantPhone);
+    const normalizedRut = normalizeRut(tenantRut);
+
+    if (normalizedEmail && !isValidEmail(normalizedEmail)) {
+      setTenantEmailError("Ingresa un correo válido.");
+      return;
+    }
+
+    if (normalizedPhone && !isValidChileanPhone(normalizedPhone)) {
+      setTenantPhoneError("Ingresa un teléfono válido. Ej: +56912345678");
+      return;
+    }
+
+    if (normalizedRut && !isValidRut(normalizedRut)) {
+      setTenantRutError("Ingresa un RUT válido.");
+      return;
+    }
+
     try {
       setLoading(true);
       const sub = await createSubscription({
         tenantName: tenantName.trim(),
-        tenantRut: tenantRut.trim() || undefined,
-        tenantEmail: tenantEmail.trim() || undefined,
+        tenantRut: normalizedRut || undefined,
+        tenantEmail: normalizedEmail || undefined,
+        tenantPhone: normalizedPhone || undefined,
         billingDay: day,
       });
       setSubscriptionId(sub.id);
+      setTenantRut(normalizedRut);
+      setTenantEmail(normalizedEmail);
+      setTenantPhone(normalizedPhone);
       setCreateSuccess("Datos guardados. Ahora agrega los cargos.");
       setTenantExpanded(false);
     } catch (e: any) {
@@ -738,22 +853,52 @@ export function SubscriptionCreatePage() {
                   <label style={labelStyle}>RUT (opcional)</label>
                   <input
                     value={tenantRut}
-                    onChange={(e) => setTenantRut(e.target.value)}
+                    onChange={(e) => {
+                      setTenantRut(normalizeRut(e.target.value));
+                      if (tenantRutError) setTenantRutError(null);
+                      if (error) setError(null);
+                    }}
                     disabled={loading || step1Done}
-                    placeholder="Ej: 12.345.678-9"
+                    placeholder="Ej: 12.345.678-5"
                     style={inputStyle}
                   />
+                  {tenantRutError && (
+                    <div
+                      style={{
+                        color: "#dc2626",
+                        fontSize: 13,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {tenantRutError}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: "grid", gap: 6 }}>
                   <label style={labelStyle}>Email (opcional)</label>
                   <input
                     value={tenantEmail}
-                    onChange={(e) => setTenantEmail(e.target.value)}
+                    onChange={(e) => {
+                      setTenantEmail(normalizeEmail(e.target.value));
+                      if (tenantEmailError) setTenantEmailError(null);
+                      if (error) setError(null);
+                    }}
                     disabled={loading || step1Done}
                     placeholder="Ej: juan@email.com"
                     style={inputStyle}
                   />
+                  {tenantEmailError && (
+                    <div
+                      style={{
+                        color: "#dc2626",
+                        fontSize: 13,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {tenantEmailError}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -768,11 +913,26 @@ export function SubscriptionCreatePage() {
                   <label style={labelStyle}>Teléfono (opcional)</label>
                   <input
                     value={tenantPhone}
-                    onChange={(e) => setTenantPhone(e.target.value)}
+                    onChange={(e) => {
+                      setTenantPhone(normalizePhone(e.target.value));
+                      if (tenantPhoneError) setTenantPhoneError(null);
+                      if (error) setError(null);
+                    }}
                     disabled={loading || step1Done}
                     placeholder="Ej: +56912345678"
                     style={inputStyle}
                   />
+                  {tenantPhoneError && (
+                    <div
+                      style={{
+                        color: "#dc2626",
+                        fontSize: 13,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {tenantPhoneError}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: "grid", gap: 6 }}>
@@ -812,11 +972,11 @@ export function SubscriptionCreatePage() {
           title="Cargos"
           hint="Agrega los conceptos que se cobrarán cada mes."
         >
-              <ItemsEditor
-          value={items}
-          onChange={handleItemsChange}
-          disabled={loading}
-        />
+          <ItemsEditor
+            value={items}
+            onChange={handleItemsChange}
+            disabled={loading}
+          />
 
           {!subscriptionId && (
             <InfoNotice>

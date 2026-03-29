@@ -29,7 +29,6 @@ export class TenantPaymentSendersController {
     },
   ) {
     const normalizedEmail = body.email.trim().toLowerCase();
-
     const sender = await this.prisma.tenantPaymentSender.create({
       data: {
         accountId,

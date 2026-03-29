@@ -29,6 +29,17 @@ export class InvoicesService {
       ? new Date(dueDate)
       : this.defaultDueDate(period, subscription.billingDay);
 
+      const existing = await this.prisma.invoice.findFirst({
+        where: {
+          subscriptionId,
+          period,
+        },
+      });
+
+      if (existing) {
+        return existing;
+      }
+
     return this.prisma.invoice.create({
       data: {
         subscriptionId,
