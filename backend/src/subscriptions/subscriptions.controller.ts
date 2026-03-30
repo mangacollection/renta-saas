@@ -30,8 +30,12 @@ export class SubscriptionsController {
       tenantName: string;
       tenantRut?: string;
       tenantEmail?: string;
+      tenantPhone?: string;
       billingDay?: number;
       startDate?: string;
+      hasInitialCharges?: boolean;
+      initialCharges?: { label: string; amount: number }[];
+      monthlyBillingStart?: string;
     },
   ) {
     return this.service.createSubscription({ accountId, ...body });
@@ -50,25 +54,45 @@ export class SubscriptionsController {
     return this.service.addItem(body);
   }
 
-      @Delete('items/:id')
-    deleteItem(
-      @Param('id') id: string,
-      @AccountId() accountId: string,
-    ) {
-      return this.service.deleteItem(id, accountId);
-    }
+  @Delete('items/:id')
+  deleteItem(
+    @Param('id') id: string,
+    @AccountId() accountId: string,
+  ) {
+    return this.service.deleteItem(id, accountId);
+  }
 
-      @Patch('items/:id')
-    updateItem(
-      @Param('id') id: string,
-      @AccountId() accountId: string,
-      @Body() body: { name?: string; amount?: number },
-    ) {
-      return this.service.updateItem(id, body, accountId);
-    }
+  @Patch('items/:id')
+  updateItem(
+    @Param('id') id: string,
+    @AccountId() accountId: string,
+    @Body() body: { name?: string; amount?: number },
+  ) {
+    return this.service.updateItem(id, body, accountId);
+  }
 
   @Patch('activate')
   activate(@Body() body: { subscriptionId: string }) {
     return this.service.activate(body.subscriptionId);
+  }
+
+  @Patch(':id')
+  updateDraft(
+    @Param('id') id: string,
+    @AccountId() accountId: string,
+    @Body()
+    body: {
+      tenantName?: string;
+      tenantRut?: string;
+      tenantEmail?: string;
+      tenantPhone?: string;
+      billingDay?: number;
+      startDate?: string;
+      hasInitialCharges?: boolean;
+      initialCharges?: { label: string; amount: number }[];
+      monthlyBillingStart?: string;
+    },
+  ) {
+    return this.service.updateDraft(id, body, accountId);
   }
 }
