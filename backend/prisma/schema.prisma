@@ -25,6 +25,11 @@ enum InvoiceStatus {
   void
 }
 
+enum InvoiceType {
+  initial
+  monthly
+}
+
 enum PaymentMethod {
   transferencia
   link_pago
@@ -105,23 +110,28 @@ model User {
 }
 
 model Subscription {
-  id          String             @id @default(cuid())
-  accountId   String
-  tenantName  String
-  tenantRut   String?
-  tenantEmail String?
-  billingDay  Int                @default(5)
-  status      SubscriptionStatus @default(draft)
-  startDate   DateTime           @default(now())
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  tenantPhone String?
+  id                  String             @id @default(cuid())
+  accountId           String
+  tenantName          String
+  tenantRut           String?
+  tenantEmail         String?
+  billingDay          Int                @default(5)
+  status              SubscriptionStatus @default(draft)
+  startDate           DateTime           @default(now())
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  tenantPhone         String?
 
-  invoices       Invoice[]
-  account        Account            @relation(fields: [accountId], references: [id])
-  items          SubscriptionItem[]
-  tenant         Tenant?
-  tenantPayments TenantPayment[]
+  hasInitialCharges   Boolean            @default(false)
+  initialCharges      Json?
+  monthlyBillingStart String?
+  firstInvoiceType    InvoiceType?
+
+  invoices            Invoice[]
+  account             Account            @relation(fields: [accountId], references: [id])
+  items               SubscriptionItem[]
+  tenant              Tenant?
+  tenantPayments      TenantPayment[]
 
   @@index([accountId])
 }
@@ -178,6 +188,7 @@ model SubscriptionItem {
 model Invoice {
   id             String        @id @default(cuid())
   subscriptionId String
+  type           InvoiceType   @default(monthly)
   period         String
   total          Int
   dueDate        DateTime
@@ -186,11 +197,12 @@ model Invoice {
   updatedAt      DateTime      @updatedAt
 
   subscription   Subscription    @relation(fields: [subscriptionId], references: [id])
+  items          InvoiceItem[]
   ledgerEntries  LedgerEntry[]
   payments       Payment[]
   tenantPayments TenantPayment[]
 
-  @@unique([subscriptionId, period])
+  @@unique([subscriptionId, type, period])
   @@index([subscriptionId])
 }
 
@@ -287,4 +299,15 @@ model PaymentSender {
   account Account @relation(fields: [accountId], references: [id])
 
   @@unique([email, accountId])
+}
+model InvoiceItem {
+  id        String   @id @default(cuid())
+  invoiceId String
+  label     String
+  amount    Int
+  createdAt DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
 }
