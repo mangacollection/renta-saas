@@ -18,8 +18,7 @@ type EnrichedInvoice = Invoice & {
   tenantPhone: string | null;
   items?: Array<{
     id?: string;
-    name?: string;
-    type?: string;
+    label?: string;
     amount?: number | string;
   }>;
 };
@@ -150,6 +149,45 @@ function StatusBadge({
   );
 }
 
+function InvoiceTypeBadge({ type }: { type?: string }) {
+  const normalized = (type ?? "monthly").toLowerCase();
+
+  const config =
+    normalized === "initial"
+      ? {
+          label: "Pago inicial",
+          background: "#ede9fe",
+          color: "#6d28d9",
+          border: "#ddd6fe",
+        }
+      : {
+          label: "Mensual",
+          background: "#ecfeff",
+          color: "#0f766e",
+          border: "#a5f3fc",
+        };
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "6px 12px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 700,
+        background: config.background,
+        color: config.color,
+        border: `1px solid ${config.border}`,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {config.label}
+    </span>
+  );
+}
+
 const th: React.CSSProperties = {
   padding: "14px 12px",
   borderBottom: "1px solid #eef2f7",
@@ -243,7 +281,7 @@ function InvoiceDetail({ invoice }: { invoice: EnrichedInvoice }) {
     >
       {items.map((item, index) => (
         <div
-          key={item.id ?? `${item.name ?? "item"}-${index}`}
+          key={item.id ?? `${item.label ?? "item"}-${index}`}
           style={{
             display: "flex",
             justifyContent: "space-between",
@@ -263,7 +301,7 @@ function InvoiceDetail({ invoice }: { invoice: EnrichedInvoice }) {
                 wordBreak: "break-word",
               }}
             >
-              {item.name ?? "Item"}
+              {item.label ?? "Item"}
             </div>
             <div
               style={{
@@ -272,7 +310,7 @@ function InvoiceDetail({ invoice }: { invoice: EnrichedInvoice }) {
                 color: "#94a3b8",
               }}
             >
-              {item.type ?? "—"}
+              Concepto facturado
             </div>
           </div>
 
@@ -333,6 +371,7 @@ function InvoiceCard({
           >
             {invoice.tenantName}
           </div>
+
           <div
             style={{
               marginTop: 4,
@@ -342,6 +381,10 @@ function InvoiceCard({
             }}
           >
             {invoice.tenantEmail ?? "Sin email"}
+          </div>
+
+          <div style={{ marginTop: 8 }}>
+            <InvoiceTypeBadge type={invoice.type} />
           </div>
         </div>
 
@@ -561,7 +604,7 @@ export default function InvoicesPage() {
           subFromInvoice?.tenantPhone ??
           (subFromList as any)?.tenantPhone ??
           null,
-        items: inv?.items ?? subFromInvoice?.items ?? [],
+        items: inv?.items ?? [],
       };
     });
   }, [ui, subById]);
@@ -645,9 +688,7 @@ export default function InvoicesPage() {
             justifyContent: isMobile ? "flex-start" : "flex-end",
             width: isMobile ? "100%" : "auto",
           }}
-        >
-          {/* espacio reservado para futuras acciones */}
-        </div>
+        />
       </section>
 
       {stats && (
@@ -882,11 +923,13 @@ export default function InvoicesPage() {
                     <th style={th}>Período</th>
                     <th style={th}>Total</th>
                     <th style={th}>Estado</th>
+                    <th style={th}>Tipo</th>
                     <th style={th}>Generado</th>
                     <th style={th}>Vence</th>
                     <th style={th}>Detalle</th>
                   </tr>
                 </thead>
+
                 <tbody>
                   {filteredInvoices.map((inv) => {
                     const isExpanded = expandedId === inv.id;
@@ -911,6 +954,10 @@ export default function InvoicesPage() {
 
                           <td style={td}>
                             <StatusBadge status={inv.status} dueDate={inv.dueDate} />
+                          </td>
+
+                          <td style={td}>
+                            <InvoiceTypeBadge type={inv.type} />
                           </td>
 
                           <td style={td}>{formatDateTime(inv.createdAt)}</td>
@@ -947,7 +994,7 @@ export default function InvoicesPage() {
                         {hasItems && isExpanded && (
                           <tr>
                             <td
-                              colSpan={7}
+                              colSpan={8}
                               style={{
                                 ...td,
                                 background: "#ffffff",

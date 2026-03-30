@@ -36,6 +36,14 @@ export type CreateSubscriptionInput = {
   tenantPhone?: string;
   billingDay?: number;
   startDate?: string;
+
+  // 🟢 NUEVO
+  hasInitialCharges?: boolean;
+  initialCharges?: {
+    label: string;
+    amount: number;
+  }[];
+  monthlyBillingStart?: string;
 };
 
 export type AddSubscriptionItemInput = {

@@ -50,3 +50,17 @@ export async function deleteSubscriptionItem(
 ): Promise<void> {
   await api.delete(`/subscriptions/items/${itemId}`);
 }
+export async function updateSubscriptionDraft(
+  subscriptionId: string,
+  input: Partial<CreateSubscriptionInput> & {
+    hasInitialCharges?: boolean;
+    initialCharges?: { label: string; amount: number }[];
+    monthlyBillingStart?: string;
+  }
+): Promise<Subscription> {
+  const res = await api.patch<Subscription>(
+    `/subscriptions/${subscriptionId}`,
+    input
+  );
+  return res.data;
+}
