@@ -143,7 +143,7 @@ export class InvoicesService {
       const total = invoiceItems.reduce((sum, it) => sum + it.amount, 0);
       const dueDate = this.defaultDueDate(period, sub.billingDay);
 
-      const existing = await this.prisma.invoice.findFirst({
+      const existingMonthly = await this.prisma.invoice.findFirst({
         where: {
           subscriptionId: sub.id,
           period,
@@ -151,7 +151,7 @@ export class InvoicesService {
         },
       });
 
-      if (existing) {
+      if (existingMonthly) {
         skipped++;
         continue;
       }
@@ -167,13 +167,15 @@ export class InvoicesService {
         },
       });
 
-      await this.prisma.invoiceItem.createMany({
-        data: invoiceItems.map((item) => ({
-          invoiceId: invoice.id,
-          label: item.label,
-          amount: item.amount,
-        })),
-      });
+      if (invoiceItems.length > 0) {
+        await this.prisma.invoiceItem.createMany({
+          data: invoiceItems.map((item) => ({
+            invoiceId: invoice.id,
+            label: item.label,
+            amount: item.amount,
+          })),
+        });
+      }
 
       created++;
     }
