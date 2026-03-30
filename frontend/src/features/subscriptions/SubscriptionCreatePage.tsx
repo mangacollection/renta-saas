@@ -181,54 +181,6 @@ function ButtonSoft(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   );
 }
 
-function Section(props: {
-  title: string;
-  hint?: string;
-  children: React.ReactNode;
-  disabled?: boolean;
-}) {
-  return (
-    <section
-      style={{
-        border: "1px solid #eef2f7",
-        background: "#ffffff",
-        borderRadius: 20,
-        padding: 18,
-        opacity: props.disabled ? 0.65 : 1,
-        boxShadow: "0 8px 24px rgba(15,23,42,0.04)",
-      }}
-    >
-      <div>
-        <div
-          style={{
-            fontWeight: 700,
-            color: "#0f172a",
-            fontSize: 17,
-            letterSpacing: "-0.02em",
-          }}
-        >
-          {props.title}
-        </div>
-        {props.hint && (
-          <div
-            style={{
-              marginTop: 6,
-              fontSize: 13,
-              color: "#64748b",
-              lineHeight: 1.5,
-              fontWeight: 500,
-            }}
-          >
-            {props.hint}
-          </div>
-        )}
-      </div>
-
-      <div style={{ marginTop: 16 }}>{props.children}</div>
-    </section>
-  );
-}
-
 function SuccessNotice({ children }: { children: React.ReactNode }) {
   return (
     <div
@@ -373,33 +325,96 @@ function StatCard({
   );
 }
 
-function DetailToggle({
-  expanded,
-  onClick,
-  label,
-}: {
+function AccordionSection(props: {
+  title: string;
+  hint?: string;
   expanded: boolean;
-  onClick: () => void;
-  label: string;
+  onToggle: () => void;
+  disabled?: boolean;
+  summary?: React.ReactNode;
+  children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <section
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        border: "none",
-        background: "transparent",
-        color: "#5b4ee6",
-        fontWeight: 700,
-        cursor: "pointer",
-        padding: 0,
+        border: "1px solid #eef2f7",
+        background: "#ffffff",
+        borderRadius: 20,
+        padding: 18,
+        opacity: props.disabled ? 0.65 : 1,
+        boxShadow: "0 8px 24px rgba(15,23,42,0.04)",
       }}
     >
-      <span>{expanded ? "Ocultar detalle ↑" : `${label} ↓`}</span>
-    </button>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontWeight: 700,
+              color: "#0f172a",
+              fontSize: 17,
+              letterSpacing: "-0.02em",
+            }}
+          >
+            {props.title}
+          </div>
+
+          {props.hint && (
+            <div
+              style={{
+                marginTop: 6,
+                fontSize: 13,
+                color: "#64748b",
+                lineHeight: 1.5,
+                fontWeight: 500,
+              }}
+            >
+              {props.hint}
+            </div>
+          )}
+
+          {!props.expanded && props.summary && (
+            <div
+              style={{
+                marginTop: 10,
+                fontSize: 13,
+                color: "#475569",
+                lineHeight: 1.5,
+              }}
+            >
+              {props.summary}
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={props.onToggle}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            border: "none",
+            background: "transparent",
+            color: "#5b4ee6",
+            fontWeight: 700,
+            cursor: "pointer",
+            padding: 0,
+          }}
+        >
+          <span>{props.expanded ? "Ocultar ↑" : "Editar ↓"}</span>
+        </button>
+      </div>
+
+      {props.expanded && <div style={{ marginTop: 16 }}>{props.children}</div>}
+    </section>
   );
 }
 
@@ -407,6 +422,8 @@ type InitialChargeDraft = {
   label: string;
   amount: string;
 };
+
+type ContractStep = "tenant" | "monthly" | "initial" | "activation";
 
 function ChargeModeCard(props: {
   selected: boolean;
@@ -501,7 +518,7 @@ export function SubscriptionCreatePage() {
   const [tenantPhone, setTenantPhone] = useState("");
   const [billingDay, setBillingDay] = useState("5");
 
-  const [hasInitialCharges, setHasInitialCharges] = useState(true);
+  const [hasInitialCharges, setHasInitialCharges] = useState(false);
   const [initialCharges, setInitialCharges] = useState<InitialChargeDraft[]>([
     { label: "Garantía", amount: "" },
   ]);
@@ -529,9 +546,15 @@ export function SubscriptionCreatePage() {
   const [itemsError, setItemsError] = useState<string | null>(null);
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
 
-  const [tenantExpanded, setTenantExpanded] = useState(!subscriptionIdFromQuery);
+  const [activeStep, setActiveStep] = useState<ContractStep>(
+    subscriptionIdFromQuery ? "monthly" : "tenant"
+  );
 
   const isSavingItemsRef = useRef(false);
+  const monthlySectionRef = useRef<HTMLDivElement | null>(null);
+  const initialSectionRef = useRef<HTMLDivElement | null>(null);
+  const activationSectionRef = useRef<HTMLDivElement | null>(null);
+  const tenantSectionRef = useRef<HTMLDivElement | null>(null);
 
   const step1Done = !!subscriptionId;
   const step2Done = savedItemIds.length > 0;
@@ -580,7 +603,6 @@ export function SubscriptionCreatePage() {
         setTenantPhone(current.tenantPhone ?? "");
         setBillingDay(String(current.billingDay ?? 5));
         setSubscriptionId(current.id);
-        setTenantExpanded(false);
 
         const currentHasInitialCharges = Boolean(current.hasInitialCharges);
         setHasInitialCharges(currentHasInitialCharges);
@@ -613,6 +635,12 @@ export function SubscriptionCreatePage() {
 
         setItems(existingItems);
         setSavedItemIds((current.items ?? []).map((it: any) => it.id));
+
+        if ((current.items ?? []).length > 0) {
+          setActiveStep(currentHasInitialCharges ? "initial" : "activation");
+        } else {
+          setActiveStep("monthly");
+        }
       } catch (e: any) {
         setError(normalizeError(e));
       } finally {
@@ -623,11 +651,14 @@ export function SubscriptionCreatePage() {
     void loadDraft();
   }, [subscriptionIdFromQuery]);
 
-  useEffect(() => {
-    if (step1Done) {
-      setTenantExpanded(false);
-    }
-  }, [step1Done]);
+  function scrollToSection(ref: React.RefObject<HTMLDivElement | null>) {
+    window.requestAnimationFrame(() => {
+      ref.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
 
   function buildNormalizedInitialCharges() {
     return hasInitialCharges
@@ -683,6 +714,8 @@ export function SubscriptionCreatePage() {
 
       if (showSuccess) {
         setInitialChargesSuccess("Pagos iniciales guardados.");
+        setActiveStep("activation");
+        scrollToSection(activationSectionRef);
       }
 
       return true;
@@ -734,6 +767,9 @@ export function SubscriptionCreatePage() {
       });
 
       setInitialChargesSuccess("Tipo de cobro actualizado.");
+      const nextStep = nextHasInitialCharges ? "initial" : "activation";
+      setActiveStep(nextStep);
+      scrollToSection(nextHasInitialCharges ? initialSectionRef : activationSectionRef);
     } catch (e: any) {
       setHasInitialCharges(previousHasInitialCharges);
       setInitialCharges(previousInitialCharges);
@@ -829,14 +865,7 @@ export function SubscriptionCreatePage() {
 
     const normalizedInitialCharges = buildNormalizedInitialCharges();
 
-    if (hasInitialCharges) {
-      if (!normalizedInitialCharges.length) {
-        setInitialChargesError(
-          "Agrega al menos un cargo inicial o cambia a solo mensual."
-        );
-        return;
-      }
-
+    if (hasInitialCharges && normalizedInitialCharges.length > 0) {
       const hasInvalidInitialCharge = normalizedInitialCharges.some(
         (item) => !item.label || !Number.isFinite(item.amount) || item.amount <= 0
       );
@@ -867,8 +896,9 @@ export function SubscriptionCreatePage() {
       setTenantEmail(normalizedEmail);
       setTenantPhone(normalizedPhone);
       setMonthlyBillingStart(normalizedMonthlyBillingStart);
-      setCreateSuccess("Datos guardados. Ahora agrega los cargos mensuales y luego activa.");
-      setTenantExpanded(false);
+      setCreateSuccess("Datos guardados. Ahora agrega los cargos mensuales.");
+      setActiveStep("monthly");
+      scrollToSection(monthlySectionRef);
     } catch (e: any) {
       setError(normalizeError(e));
     } finally {
@@ -994,6 +1024,10 @@ export function SubscriptionCreatePage() {
           ? "Cargos guardados correctamente."
           : "No había cargos nuevos para guardar."
       );
+
+      const nextStep = hasInitialCharges ? "initial" : "activation";
+      setActiveStep(nextStep);
+      scrollToSection(hasInitialCharges ? initialSectionRef : activationSectionRef);
     } catch (e: any) {
       setError(normalizeError(e));
     } finally {
@@ -1036,6 +1070,39 @@ export function SubscriptionCreatePage() {
       setLoading(false);
     }
   }
+
+  const tenantSummary = step1Done ? (
+    <>
+      <strong>{tenantName || "Sin nombre"}</strong>
+      <br />
+      {tenantEmail || "Sin email"} • Día {billingDay || "5"} • Inicio {monthlyBillingStart || "Pendiente"}
+    </>
+  ) : (
+    "Completa los datos del arrendatario para continuar."
+  );
+
+  const monthlySummary = step2Done ? (
+    <>
+      {items.length} {items.length === 1 ? "cargo guardado" : "cargos guardados"} • Total mensual{" "}
+      {itemsTotal.toLocaleString("es-CL")} CLP
+    </>
+  ) : (
+    "Define los conceptos que se cobrarán cada mes."
+  );
+
+  const initialSummary = hasInitialCharges ? (
+    <>
+      {initialCharges.length} {initialCharges.length === 1 ? "cargo inicial" : "cargos iniciales"} • Total{" "}
+      {initialChargesTotal.toLocaleString("es-CL")} CLP
+    </>
+  ) : (
+    "Modo seleccionado: solo mensual."
+  );
+
+  const activationSummary =
+    step2Done && step3Done
+      ? "Todo listo para activar el contrato."
+      : "Faltan cargos mensuales o período de inicio para activar.";
 
   return (
     <div
@@ -1125,37 +1192,17 @@ export function SubscriptionCreatePage() {
       )}
 
       <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
-        <Section
-          title="Arrendatario"
-          hint="Define quién arrienda y el día de cobro mensual."
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: 12,
-              alignItems: "center",
-              flexWrap: "wrap",
-              marginBottom: tenantExpanded ? 14 : 0,
+        <div ref={tenantSectionRef}>
+          <AccordionSection
+            title="Arrendatario"
+            hint="Define quién arrienda y el día de cobro mensual."
+            expanded={activeStep === "tenant"}
+            onToggle={() => {
+              setActiveStep(activeStep === "tenant" ? "monthly" : "tenant");
+              scrollToSection(tenantSectionRef);
             }}
+            summary={tenantSummary}
           >
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 700, color: "#0f172a" }}>
-                {tenantName || "Nuevo arrendatario"}
-              </div>
-              <div style={{ marginTop: 4, fontSize: 13, color: "#64748b" }}>
-                {tenantEmail || "Sin email"} • Día {billingDay || "5"}
-              </div>
-            </div>
-
-            <DetailToggle
-              expanded={tenantExpanded}
-              onClick={() => setTenantExpanded((prev) => !prev)}
-              label="Ver detalle"
-            />
-          </div>
-
-          {tenantExpanded && (
             <div style={{ display: "grid", gap: 12 }}>
               <div style={{ display: "grid", gap: 6 }}>
                 <label style={labelStyle}>Nombre arrendatario</label>
@@ -1189,13 +1236,7 @@ export function SubscriptionCreatePage() {
                     style={inputStyle}
                   />
                   {tenantRutError && (
-                    <div
-                      style={{
-                        color: "#dc2626",
-                        fontSize: 13,
-                        fontWeight: 600,
-                      }}
-                    >
+                    <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 600 }}>
                       {tenantRutError}
                     </div>
                   )}
@@ -1215,13 +1256,7 @@ export function SubscriptionCreatePage() {
                     style={inputStyle}
                   />
                   {tenantEmailError && (
-                    <div
-                      style={{
-                        color: "#dc2626",
-                        fontSize: 13,
-                        fontWeight: 600,
-                      }}
-                    >
+                    <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 600 }}>
                       {tenantEmailError}
                     </div>
                   )}
@@ -1249,13 +1284,7 @@ export function SubscriptionCreatePage() {
                     style={inputStyle}
                   />
                   {tenantPhoneError && (
-                    <div
-                      style={{
-                        color: "#dc2626",
-                        fontSize: 13,
-                        fontWeight: 600,
-                      }}
-                    >
+                    <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 600 }}>
                       {tenantPhoneError}
                     </div>
                   )}
@@ -1289,13 +1318,7 @@ export function SubscriptionCreatePage() {
                   style={inputStyle}
                 />
                 {monthlyBillingStartError && (
-                  <div
-                    style={{
-                      color: "#dc2626",
-                      fontSize: 13,
-                      fontWeight: 600,
-                    }}
-                  >
+                  <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 600 }}>
                     {monthlyBillingStartError}
                   </div>
                 )}
@@ -1317,44 +1340,60 @@ export function SubscriptionCreatePage() {
                 )}
               </div>
             </div>
-          )}
-        </Section>
+          </AccordionSection>
+        </div>
 
-        <Section
-          title="Cargos mensuales"
-          hint="Agrega los conceptos que se cobrarán cada mes."
-        >
-          <ItemsEditor
-            value={items}
-            onChange={handleItemsChange}
-            disabled={loading}
-          />
-
-          {!subscriptionId && (
-            <InfoNotice>
-              Puedes preparar los cargos desde ya. Para guardarlos, primero guarda los datos del arrendatario.
-            </InfoNotice>
-          )}
-
-          {itemsInfo && <InfoNotice>{itemsInfo}</InfoNotice>}
-          {itemsSuccess && !loading && <SuccessNotice>{itemsSuccess}</SuccessNotice>}
-          {itemsError && <WarningNotice>{itemsError}</WarningNotice>}
-
-          <div
-            style={{
-              marginTop: 14,
-              padding: 14,
-              borderRadius: 16,
-              background: "#f8fafc",
-              border: "1px solid #e2e8f0",
-              display: "flex",
-              justifyContent: "space-between",
-              gap: 12,
-              flexWrap: "wrap",
-              alignItems: "center",
+        <div ref={monthlySectionRef}>
+          <AccordionSection
+            title="Cargos mensuales"
+            hint="Agrega los conceptos que se cobrarán cada mes."
+            expanded={activeStep === "monthly"}
+            onToggle={() => {
+              setActiveStep(activeStep === "monthly" ? "tenant" : "monthly");
+              scrollToSection(monthlySectionRef);
             }}
+            summary={monthlySummary}
           >
-            <div>
+            <ItemsEditor
+              value={items}
+              onChange={handleItemsChange}
+              disabled={loading}
+            />
+
+            {!subscriptionId && (
+              <InfoNotice>
+                Puedes preparar los cargos desde ya. Para guardarlos, primero guarda los datos del arrendatario.
+              </InfoNotice>
+            )}
+
+            {itemsInfo && <InfoNotice>{itemsInfo}</InfoNotice>}
+            {itemsSuccess && !loading && <SuccessNotice>{itemsSuccess}</SuccessNotice>}
+            {itemsError && <WarningNotice>{itemsError}</WarningNotice>}
+
+            <div
+              style={{
+                marginTop: 12,
+                display: "flex",
+                justifyContent: "flex-end",
+              }}
+            >
+              <ButtonPrimary
+                onClick={onSaveItems}
+                disabled={loading || !subscriptionId || items.length === 0}
+              >
+                {loading ? "Guardando..." : "Guardar cargos"}
+              </ButtonPrimary>
+            </div>
+
+            <div
+              style={{
+                marginTop: 12,
+                padding: 14,
+                borderRadius: 16,
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+              }}
+            >
               <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>
                 Total mensual estimado
               </div>
@@ -1369,198 +1408,202 @@ export function SubscriptionCreatePage() {
                 {itemsTotal.toLocaleString("es-CL")} CLP
               </div>
             </div>
+          </AccordionSection>
+        </div>
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <ButtonSoft disabled title="Próximamente">
-                Limpiar
-              </ButtonSoft>
-
-              <ButtonPrimary
-                onClick={onSaveItems}
-                disabled={loading || !subscriptionId || items.length === 0}
-              >
-                {loading ? "Guardando..." : "Guardar cargos"}
-              </ButtonPrimary>
-            </div>
-          </div>
-        </Section>
-
-        <Section
-          title="Pagos iniciales"
-          hint="Elige si este contrato parte solo con cobro mensual o si además tendrá una factura inicial."
-        >
-          <div style={{ display: "grid", gap: 14 }}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                gap: 12,
-              }}
-            >
-              <ChargeModeCard
-                isMobile={isMobile}
-                selected={!hasInitialCharges}
-                disabled={loading}
-                onClick={() => {
-                  void selectChargeMode(false);
-                }}
-                title="Solo mensual"
-                description="No se genera factura al activar. El contrato queda listo para facturación mensual."
-              />
-
-              <ChargeModeCard
-                isMobile={isMobile}
-                selected={hasInitialCharges}
-                disabled={loading}
-                onClick={() => {
-                  void selectChargeMode(true);
-                }}
-                title="Mensual + pago inicial"
-                description="Se genera una factura inicial al activar con garantía, mes de adelanto u otros cobros únicos."
-              />
-            </div>
-
-            {!hasInitialCharges && (
-              <InfoNotice>
-                No se generará factura al activar. Solo quedará configurado el inicio de facturación mensual.
-              </InfoNotice>
-            )}
-
-            {hasInitialCharges && (
-              <>
-                <div style={{ display: "grid", gap: 10 }}>
-                  {initialCharges.map((item, idx) => (
-                    <div
-                      key={`initial-charge-${idx}`}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: isMobile ? "1fr" : "1fr 180px auto",
-                        gap: 10,
-                        alignItems: "center",
-                      }}
-                    >
-                      <input
-                        value={item.label}
-                        onChange={(e) =>
-                          updateInitialCharge(idx, { label: e.target.value })
-                        }
-                        disabled={loading}
-                        placeholder="Ej: Garantía"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={item.amount}
-                        onChange={(e) =>
-                          updateInitialCharge(idx, {
-                            amount: e.target.value.replace(/[^\d]/g, ""),
-                          })
-                        }
-                        disabled={loading}
-                        placeholder="Monto"
-                        style={inputStyle}
-                        inputMode="numeric"
-                      />
-                      <ButtonSoft
-                        type="button"
-                        onClick={() => removeInitialCharge(idx)}
-                        disabled={loading}
-                      >
-                        Quitar
-                      </ButtonSoft>
-                    </div>
-                  ))}
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 10,
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                  }}
-                >
-                  <ButtonSoft
-                    type="button"
-                    onClick={addInitialCharge}
-                    disabled={loading}
-                  >
-                    + Agregar cargo inicial
-                  </ButtonSoft>
-
-                  <ButtonPrimary
-                    type="button"
-                    onClick={() => {
-                      void saveInitialChargesDraft(true);
-                    }}
-                    disabled={loading || !subscriptionId}
-                  >
-                    {loading ? "Guardando..." : "Guardar pagos iniciales"}
-                  </ButtonPrimary>
-
-                  <span style={{ color: "#64748b", fontSize: 13, fontWeight: 700 }}>
-                    Total inicial: {initialChargesTotal.toLocaleString("es-CL")} CLP
-                  </span>
-                </div>
-
-                {initialChargesSuccess && !loading && (
-                  <SuccessNotice>{initialChargesSuccess}</SuccessNotice>
-                )}
-
-                {initialChargesError && (
-                  <WarningNotice>{initialChargesError}</WarningNotice>
-                )}
-              </>
-            )}
-          </div>
-        </Section>
-
-        <Section
-          title="Activación"
-          hint="Activa el contrato cuando ya tenga datos, período de inicio y cargos mensuales guardados."
-          disabled={!subscriptionId || !step2Done || !step3Done}
-        >
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-              alignItems: "flex-start",
+        <div ref={initialSectionRef}>
+          <AccordionSection
+            title="Pagos iniciales"
+            hint="Elige si este contrato parte solo con cobro mensual o si además tendrá una factura inicial."
+            expanded={activeStep === "initial"}
+            onToggle={() => {
+              setActiveStep(activeStep === "initial" ? "monthly" : "initial");
+              scrollToSection(initialSectionRef);
             }}
+            summary={initialSummary}
           >
-            <div
-              style={{
-                fontSize: 14,
-                color: "#334155",
-                lineHeight: 1.5,
-              }}
-            >
-              {step2Done && step3Done ? (
+            <div style={{ display: "grid", gap: 14 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                  gap: 12,
+                }}
+              >
+                <ChargeModeCard
+                  isMobile={isMobile}
+                  selected={!hasInitialCharges}
+                  disabled={loading}
+                  onClick={() => {
+                    void selectChargeMode(false);
+                  }}
+                  title="Solo mensual"
+                  description="No se genera factura al activar. El contrato queda listo para facturación mensual."
+                />
+
+                <ChargeModeCard
+                  isMobile={isMobile}
+                  selected={hasInitialCharges}
+                  disabled={loading}
+                  onClick={() => {
+                    void selectChargeMode(true);
+                  }}
+                  title="Mensual + pago inicial"
+                  description="Se genera una factura inicial al activar con garantía, mes de adelanto u otros cobros únicos."
+                />
+              </div>
+
+              {!hasInitialCharges && (
+                <InfoNotice>
+                  No se generará factura al activar. Solo quedará configurado el inicio de facturación mensual.
+                </InfoNotice>
+              )}
+
+              {hasInitialCharges && (
                 <>
-                  Todo listo. Si definiste pagos iniciales, al activar se generará
-                  una factura inicial. Si no, el contrato quedará listo para la
-                  facturación mensual del período configurado.
-                </>
-              ) : (
-                <>
-                  Guarda al menos un cargo mensual y define el inicio de facturación antes de activar.
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {initialCharges.map((item, idx) => (
+                      <div
+                        key={`initial-charge-${idx}`}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: isMobile ? "1fr" : "1fr 180px auto",
+                          gap: 10,
+                          alignItems: "center",
+                        }}
+                      >
+                        <input
+                          value={item.label}
+                          onChange={(e) =>
+                            updateInitialCharge(idx, { label: e.target.value })
+                          }
+                          disabled={loading}
+                          placeholder="Ej: Garantía"
+                          style={inputStyle}
+                        />
+                        <input
+                          value={item.amount}
+                          onChange={(e) =>
+                            updateInitialCharge(idx, {
+                              amount: e.target.value.replace(/[^\d]/g, ""),
+                            })
+                          }
+                          disabled={loading}
+                          placeholder="Monto"
+                          style={inputStyle}
+                          inputMode="numeric"
+                        />
+                        <ButtonSoft
+                          type="button"
+                          onClick={() => removeInitialCharge(idx)}
+                          disabled={loading}
+                        >
+                          Quitar
+                        </ButtonSoft>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                    }}
+                  >
+                    <ButtonSoft
+                      type="button"
+                      onClick={addInitialCharge}
+                      disabled={loading}
+                    >
+                      + Agregar cargo inicial
+                    </ButtonSoft>
+
+                    <ButtonPrimary
+                      type="button"
+                      onClick={() => {
+                        void saveInitialChargesDraft(true);
+                      }}
+                      disabled={loading || !subscriptionId}
+                    >
+                      {loading ? "Guardando..." : "Guardar pagos iniciales"}
+                    </ButtonPrimary>
+
+                    <span style={{ color: "#64748b", fontSize: 13, fontWeight: 700 }}>
+                      Total inicial: {initialChargesTotal.toLocaleString("es-CL")} CLP
+                    </span>
+                  </div>
+
+                  {initialChargesSuccess && !loading && (
+                    <SuccessNotice>{initialChargesSuccess}</SuccessNotice>
+                  )}
+
+                  {initialChargesError && (
+                    <WarningNotice>{initialChargesError}</WarningNotice>
+                  )}
                 </>
               )}
             </div>
+          </AccordionSection>
+        </div>
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <ButtonPrimary
-                onClick={onActivate}
-                disabled={loading || !subscriptionId || !step2Done || !step3Done}
+        <div ref={activationSectionRef}>
+          <AccordionSection
+            title="Activación"
+            hint="Activa el contrato cuando ya tenga datos, período de inicio y cargos mensuales guardados."
+            expanded={activeStep === "activation"}
+            onToggle={() => {
+              setActiveStep(activeStep === "activation" ? "monthly" : "activation");
+              scrollToSection(activationSectionRef);
+            }}
+            disabled={!subscriptionId || !step2Done || !step3Done}
+            summary={activationSummary}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+                alignItems: "flex-start",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 14,
+                  color: "#334155",
+                  lineHeight: 1.5,
+                }}
               >
-                {loading ? "Activando..." : "Activar contrato"}
-              </ButtonPrimary>
+                {step2Done && step3Done ? (
+                  <>
+                    Todo listo. Al activar:
+                    si definiste pagos iniciales, se generará una factura inicial;
+                    si elegiste solo mensual, el contrato quedará listo para la
+                    facturación mensual del período configurado.
+                  </>
+                ) : (
+                  <>
+                    Guarda al menos un cargo mensual y define el inicio de facturación antes de activar.
+                  </>
+                )}
+              </div>
 
-              <ButtonSoft onClick={() => navigate("/")} disabled={loading}>
-                Volver a contratos
-              </ButtonSoft>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <ButtonPrimary
+                  onClick={onActivate}
+                  disabled={loading || !subscriptionId || !step2Done || !step3Done}
+                >
+                  {loading ? "Activando..." : "Activar contrato"}
+                </ButtonPrimary>
+
+                <ButtonSoft onClick={() => navigate("/")} disabled={loading}>
+                  Volver a contratos
+                </ButtonSoft>
+              </div>
             </div>
-          </div>
-        </Section>
+          </AccordionSection>
+        </div>
       </div>
     </div>
   );
