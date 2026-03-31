@@ -180,4 +180,111 @@ export class InvoicesService {
 
     return { period, created, skipped, processed: subs.length };
   }
+async generateMonthlyAuto(input?: { accountId?: string }) {
+  
+  const { accountId } = input ?? {};
+
+  const subs = await this.prisma.subscription.findMany({
+    where: {
+      status: 'active',
+      ...(accountId ? { accountId } : {}),
+    },
+    include: { items: true },
+  });
+  console.log(`[MonthlyBilling] start subscriptions=${subs.length}`);
+
+  let created = 0;
+  let skipped = 0;
+
+  for (const sub of subs) {
+    if (!sub.items?.length) {
+      skipped++;
+      continue;
+    }
+
+    if (!sub.monthlyBillingStart) {
+      skipped++;
+      continue;
+    }
+
+    const { period, dueDate } = this.getTargetPeriodAndDueDate(sub.billingDay);
+
+    if (period < sub.monthlyBillingStart) {
+      skipped++;
+      continue;
+    }
+
+    const existing = await this.prisma.invoice.findFirst({
+      where: {
+        subscriptionId: sub.id,
+        period,
+        type: 'monthly',
+      },
+    });
+
+    if (existing) {
+      skipped++;
+      continue;
+    }
+
+    const invoiceItems = sub.items.map((it) => ({
+      label: it.name,
+      amount: it.amount,
+    }));
+
+    const total = invoiceItems.reduce((sum, it) => sum + it.amount, 0);
+
+    const invoice = await this.prisma.invoice.create({
+      data: {
+        subscriptionId: sub.id,
+        period,
+        total,
+        dueDate,
+        status: 'pending',
+        type: 'monthly',
+      },
+    });
+
+    await this.prisma.invoiceItem.createMany({
+      data: invoiceItems.map((item) => ({
+        invoiceId: invoice.id,
+        label: item.label,
+        amount: item.amount,
+      })),
+    });
+
+    created++;
+  }
+console.log(
+  `[MonthlyBilling] done created=${created} skipped=${skipped} processed=${subs.length}`
+);
+  return { created, skipped, processed: subs.length };
+}
+
+  private getTargetPeriodAndDueDate(billingDay: number) {
+  const now = new Date();
+
+  let year = now.getUTCFullYear();
+  let month = now.getUTCMonth() + 1;
+
+  // regla clave
+  if (now.getUTCDate() > billingDay) {
+    if (month === 12) {
+      year += 1;
+      month = 1;
+    } else {
+      month += 1;
+    }
+  }
+
+  const period = `${year}-${String(month).padStart(2, '0')}`;
+
+  // 👇 clamp de días (evita febrero 31)
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const safeDay = Math.min(billingDay, daysInMonth);
+
+  const dueDate = new Date(Date.UTC(year, month - 1, safeDay, 12, 0, 0));
+
+  return { period, dueDate };
+}
 }
