@@ -26,7 +26,14 @@ export class TenantGuard implements CanActivate {
     const email = decoded?.email;
     if (!email) throw new UnauthorizedException('Token has no email');
 
-    const user = await this.prisma.user.findUnique({ where: { email } });
+   const user = await this.prisma.user.findFirst({
+  where: {
+    email: {
+      equals: email,
+      mode: 'insensitive',
+    },
+  },
+});
     if (!user) throw new ForbiddenException('User not onboarded in platform');
 
     req.accountId = user.accountId;
