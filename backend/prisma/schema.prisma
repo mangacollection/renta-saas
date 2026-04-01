@@ -75,7 +75,8 @@ model Account {
   users           User[]
   tenants         Tenant[]
   tenantPayments  TenantPayment[]
-
+  collectionEvents CollectionEvent[]
+  
   tenantPaymentSenders TenantPaymentSender[]
 }
 
@@ -201,9 +202,29 @@ model Invoice {
   ledgerEntries  LedgerEntry[]
   payments       Payment[]
   tenantPayments TenantPayment[]
+  collectionEvents CollectionEvent[]
 
   @@unique([subscriptionId, type, period])
   @@index([subscriptionId])
+}
+
+enum CollectionChannel {
+  whatsapp
+}
+
+model CollectionEvent {
+  id        String            @id @default(cuid())
+  accountId String
+  invoiceId String
+  channel   CollectionChannel @default(whatsapp)
+  message   String
+  createdAt DateTime          @default(now())
+
+  account Account @relation(fields: [accountId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([accountId, createdAt])
+  @@index([invoiceId, createdAt])
 }
 
 model Payment {
