@@ -31,3 +31,31 @@ export async function generateMonthAuto(): Promise<{
 
   return res.data;
 }
+
+// 🔥 AI — generar mensaje de cobranza
+export async function generateCollectionMessage(payload: {
+  tenantName: string;
+  amount: number;
+  daysLate: number;
+  dueDate: string;
+  propertyName: string;
+}) {
+  const res = await api.post("/ai/collection-message", payload);
+  return res.data;
+}
+// 🔥 tracking cobranza
+export async function createCollectionEvent(payload: {
+  invoiceId: string;
+  message: string;
+}) {
+  const res = await api.post("/collection-events", payload);
+  return res.data;
+}
+
+// 🔥 timeline cobranza
+export async function getCollectionEvents(invoiceId: string) {
+  const res = await api.get("/collection-events", {
+    params: { invoiceId },
+  });
+  return res.data;
+}

@@ -14,6 +14,8 @@ import { PayoutsModule } from './payouts/payouts.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { GmailModule } from './integrations/gmail/gmail.module';
+import { AiModule } from './ai/ai.module'; // 👈 NUEVO
+import { CollectionEventsModule } from './collection-events/collection-events.module';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { GmailModule } from './integrations/gmail/gmail.module';
     PayoutsModule,
     AuthModule,
     GmailModule,
+    AiModule, // 👈 NUEVO
+    CollectionEventsModule,
   ],
   controllers: [AppController],
   providers: [AppService, TenantGuard],
