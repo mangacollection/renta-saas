@@ -7,3 +7,27 @@ export async function getInvoices(subscriptionId: string): Promise<Invoice[]> {
   });
   return res.data;
 }
+
+export async function generateMonthAuto(): Promise<{
+  created: number;
+  skipped: number;
+  processed: number;
+}> {
+  const billingSecret =
+    import.meta.env.VITE_BILLING_SECRET ??
+    (typeof window !== "undefined"
+      ? window.localStorage.getItem("billing_secret") ?? ""
+      : "");
+
+  const res = await api.post(
+    "/invoices/generate-month-auto",
+    undefined,
+    {
+      headers: {
+        "x-billing-secret": billingSecret,
+      },
+    }
+  );
+
+  return res.data;
+}
