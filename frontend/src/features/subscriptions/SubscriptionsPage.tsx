@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
 import { getSubscriptions } from "./subscriptions.api";
+import { generateMonthAuto } from "@/features/invoices/invoices.api";
 import type { Subscription } from "./subscriptions.types";
 import { setPageTitle } from "@/lib/pageTitle";
 import { EmptyState } from "@/components/EmptyState";
@@ -45,6 +46,18 @@ function formatCLP(value: number) {
 
 function sumItems(sub: Subscription) {
   return (sub.items ?? []).reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+}
+
+function getNextBillingDate(billingDay: number) {
+  const today = new Date();
+
+  let next = new Date(today.getFullYear(), today.getMonth(), billingDay);
+
+  if (today > next) {
+    next = new Date(today.getFullYear(), today.getMonth() + 1, billingDay);
+  }
+
+  return next.toISOString();
 }
 
 function ChevronRightIcon({ color = "#94a3b8" }: { color?: string }) {
@@ -333,6 +346,7 @@ function SubscriptionCard({
   onOpenDraft: (id: string) => void;
 }) {
   const total = sumItems(subscription);
+  const nextBillingDate = getNextBillingDate(subscription.billingDay);
   const [expanded, setExpanded] = useState(false);
   const items = subscription.items ?? [];
   const hasItems = items.length > 0;
@@ -456,6 +470,32 @@ function SubscriptionCard({
 
       <div
         style={{
+          padding: 14,
+          borderRadius: 18,
+          background: "#eef2ff",
+          border: "1px solid #e0e7ff",
+        }}
+      >
+        <div style={{ fontSize: 12, color: "#5b4ee6", fontWeight: 700 }}>
+          Próxima factura
+        </div>
+        <div
+          style={{
+            marginTop: 4,
+            fontSize: 16,
+            fontWeight: 800,
+            color: "#0f172a",
+          }}
+        >
+          {formatDate(nextBillingDate)}
+        </div>
+        <div style={{ marginTop: 4, fontSize: 13, color: "#64748b" }}>
+          {formatCLP(total)}
+        </div>
+      </div>
+
+      <div
+        style={{
           display: "flex",
           justifyContent: "space-between",
           gap: 12,
@@ -510,6 +550,9 @@ export function SubscriptionsPage() {
   const [expandedDesktopId, setExpandedDesktopId] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<SubscriptionView>("active");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [isGeneratingBilling, setIsGeneratingBilling] = useState(false);
+  const [billingMessage, setBillingMessage] = useState<string | null>(null);
+  const [billingError, setBillingError] = useState<string | null>(null);
 
   async function load() {
     try {
@@ -522,6 +565,34 @@ export function SubscriptionsPage() {
         err?.message ??
         "No se pudo cargar subscriptions";
       setUi({ status: "error", message: String(msg) });
+    }
+  }
+
+  async function handleGenerateBillingNow() {
+    try {
+      setIsGeneratingBilling(true);
+      setBillingError(null);
+      setBillingMessage(null);
+
+      const result = await generateMonthAuto();
+
+      if ((result?.created ?? 0) > 0) {
+        setBillingMessage(
+          `Facturación generada. Se crearon ${result.created} factura(s).`
+        );
+      } else {
+        setBillingMessage("No había facturas pendientes por generar.");
+      }
+
+      await load();
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ??
+        err?.message ??
+        "No se pudo generar la facturación automática";
+      setBillingError(String(msg));
+    } finally {
+      setIsGeneratingBilling(false);
     }
   }
 
@@ -620,8 +691,26 @@ export function SubscriptionsPage() {
         <div
           style={{
             width: isMobile ? "100%" : "auto",
+            display: "flex",
+            gap: 10,
+            flexDirection: isMobile ? "column" : "row",
           }}
         >
+          <PrimaryButton
+            type="button"
+            onClick={handleGenerateBillingNow}
+            disabled={isGeneratingBilling}
+            style={{
+              width: isMobile ? "100%" : "auto",
+              background: "#ffffff",
+              color: "#5b4ee6",
+              border: "1px solid #c7d2fe",
+              boxShadow: "none",
+            }}
+          >
+            {isGeneratingBilling ? "Generando..." : "Generar facturación ahora"}
+          </PrimaryButton>
+
           <PrimaryButton
             onClick={() => navigate("/subscriptions/new")}
             style={{ width: isMobile ? "100%" : "auto" }}
@@ -630,6 +719,40 @@ export function SubscriptionsPage() {
           </PrimaryButton>
         </div>
       </section>
+
+      {billingMessage && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: "12px 16px",
+            borderRadius: 16,
+            background: "#ecfdf5",
+            border: "1px solid #bbf7d0",
+            color: "#166534",
+            fontSize: 14,
+            fontWeight: 700,
+          }}
+        >
+          {billingMessage}
+        </div>
+      )}
+
+      {billingError && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: "12px 16px",
+            borderRadius: 16,
+            background: "#fff1f2",
+            border: "1px solid #fecaca",
+            color: "#991b1b",
+            fontSize: 14,
+            fontWeight: 700,
+          }}
+        >
+          {billingError}
+        </div>
+      )}
 
       {stats && (
         <div
@@ -681,63 +804,63 @@ export function SubscriptionsPage() {
         </div>
       )}
 
-            {stats && (
-          <div
+      {stats && (
+        <div
+          style={{
+            marginTop: 14,
+            marginBottom: 2,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap",
+          }}
+        >
+          <span
             style={{
-              marginTop: 14,
-              marginBottom: 2,
-              display: "flex",
+              fontSize: 12,
+              fontWeight: 700,
+              color: "#64748b",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+            }}
+          >
+            Vista actual
+          </span>
+
+          <span
+            style={{
+              display: "inline-flex",
               alignItems: "center",
-              gap: 8,
-              flexWrap: "wrap",
-            }}
-          >
-            <span
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                color: "#64748b",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-              }}
-            >
-              Vista actual
-            </span>
-
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                padding: "8px 12px",
-                borderRadius: 999,
-                background: "rgba(109,94,252,0.10)",
-                color: "#5b4ee6",
-                fontSize: 13,
-                fontWeight: 700,
-                border: "1px solid rgba(109,94,252,0.18)",
-              }}
-            >
-              {currentViewLabel}
-            </span>
-          </div>
-        )}
-
-        {currentView === "active" && (
-          <div
-            style={{
-              marginTop: 12,
-              padding: "12px 16px",
-              borderRadius: 16,
-              background: "#f8fafc",
-              border: "1px solid #e2e8f0",
-              color: "#475569",
+              padding: "8px 12px",
+              borderRadius: 999,
+              background: "rgba(109,94,252,0.10)",
+              color: "#5b4ee6",
               fontSize: 13,
-              lineHeight: 1.5,
+              fontWeight: 700,
+              border: "1px solid rgba(109,94,252,0.18)",
             }}
           >
-            Los contratos activos ya no se editan como borrador.
-          </div>
-        )}
+            {currentViewLabel}
+          </span>
+        </div>
+      )}
+
+      {currentView === "active" && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: "12px 16px",
+            borderRadius: 16,
+            background: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            color: "#475569",
+            fontSize: 13,
+            lineHeight: 1.5,
+          }}
+        >
+          Los contratos activos ya no se editan como borrador.
+        </div>
+      )}
 
       {stats && (
         <div
@@ -875,6 +998,7 @@ export function SubscriptionsPage() {
                 <tbody>
                   {filteredSubscriptions.map((s) => {
                     const total = sumItems(s);
+                    const nextBillingDate = getNextBillingDate(s.billingDay);
                     const isExpanded = expandedDesktopId === s.id;
                     const items = s.items ?? [];
                     const hasItems = items.length > 0;
@@ -919,6 +1043,16 @@ export function SubscriptionsPage() {
                               }}
                             >
                               Día {s.billingDay} / mes
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: "#5b4ee6",
+                                marginTop: 4,
+                                fontWeight: 700,
+                              }}
+                            >
+                              Próxima: {formatDate(nextBillingDate)}
                             </div>
                           </td>
 

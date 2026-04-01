@@ -210,11 +210,13 @@ const td: React.CSSProperties = {
 function StatCard({
   label,
   value,
+  subtitle,
   active = false,
   onClick,
 }: {
   label: string;
   value: string | number;
+  subtitle?: string;
   active?: boolean;
   onClick?: () => void;
 }) {
@@ -248,6 +250,7 @@ function StatCard({
       >
         {label}
       </div>
+
       <div
         style={{
           marginTop: 6,
@@ -255,10 +258,24 @@ function StatCard({
           fontWeight: 800,
           color: "#0f172a",
           letterSpacing: "-0.03em",
+          lineHeight: 1.1,
         }}
       >
         {value}
       </div>
+
+      {subtitle ? (
+        <div
+          style={{
+            marginTop: 6,
+            fontSize: 13,
+            color: "#64748b",
+            fontWeight: 600,
+          }}
+        >
+          {subtitle}
+        </div>
+      ) : null}
     </button>
   );
 }
@@ -577,10 +594,16 @@ export default function InvoicesPage() {
 
     const total = ui.data.length;
     const paid = ui.data.filter((i) => i.status === "paid").length;
-    const pending = ui.data.filter((i) => i.status === "pending").length;
+    const pendingInvoices = ui.data.filter((i) => i.status === "pending");
+    const pending = pendingInvoices.length;
     const failed = ui.data.filter((i) => i.status === "failed").length;
 
-    return { total, paid, pending, failed };
+    const pendingAmount = pendingInvoices.reduce(
+      (sum, i) => sum + (Number(i.total) || 0),
+      0
+    );
+
+    return { total, paid, pending, failed, pendingAmount };
   }, [ui]);
 
   const enrichedInvoices = useMemo<EnrichedInvoice[]>(() => {
@@ -592,14 +615,9 @@ export default function InvoicesPage() {
 
       return {
         ...inv,
-        tenantName:
-          subFromInvoice?.tenantName ??
-          subFromList?.tenantName ??
-          "—",
+        tenantName: subFromInvoice?.tenantName ?? subFromList?.tenantName ?? "—",
         tenantEmail:
-          subFromInvoice?.tenantEmail ??
-          subFromList?.tenantEmail ??
-          null,
+          subFromInvoice?.tenantEmail ?? subFromList?.tenantEmail ?? null,
         tenantPhone:
           subFromInvoice?.tenantPhone ??
           (subFromList as any)?.tenantPhone ??
@@ -704,7 +722,8 @@ export default function InvoicesPage() {
         >
           <StatCard
             label="Pendientes"
-            value={stats.pending}
+            value={formatCLP(stats.pendingAmount)}
+            subtitle={`${stats.pending} factura${stats.pending === 1 ? "" : "s"}`}
             active={currentView === "pending"}
             onClick={() => setCurrentView("pending")}
           />
@@ -877,12 +896,14 @@ export default function InvoicesPage() {
         />
       )}
 
-      {ui.status === "success" && ui.data.length > 0 && filteredInvoices.length === 0 && (
-        <EmptyState
-          title="No encontramos resultados"
-          description="Prueba con otro nombre, correo o cambia el filtro actual."
-        />
-      )}
+      {ui.status === "success" &&
+        ui.data.length > 0 &&
+        filteredInvoices.length === 0 && (
+          <EmptyState
+            title="No encontramos resultados"
+            description="Prueba con otro nombre, correo o cambia el filtro actual."
+          />
+        )}
 
       {ui.status === "success" && filteredInvoices.length > 0 && (
         <>
@@ -986,7 +1007,9 @@ export default function InvoicesPage() {
                                 {isExpanded ? "Ocultar detalle ↑" : "Ver detalle ↓"}
                               </button>
                             ) : (
-                              <span style={{ fontSize: 12, color: "#cbd5e1" }}>—</span>
+                              <span style={{ fontSize: 12, color: "#cbd5e1" }}>
+                                —
+                              </span>
                             )}
                           </td>
                         </tr>
