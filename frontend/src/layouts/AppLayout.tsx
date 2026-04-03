@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
+import { getAutomationRecommendations } from "@/features/invoices/invoices.api";
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(
@@ -372,6 +373,7 @@ export default function AppLayout() {
   const isMobile = useIsMobile();
 
   const [showQuickActions, setShowQuickActions] = useState(false);
+  const [hasNotifications, setHasNotifications] = useState(false);
 
   const pageTitle = useMemo(() => {
     if (location.pathname === "/") return "Contratos";
@@ -390,6 +392,19 @@ export default function AppLayout() {
 
   useEffect(() => {
     setShowQuickActions(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    async function checkNotifications() {
+      try {
+        const data = await getAutomationRecommendations();
+        setHasNotifications(data.length > 0);
+      } catch (err) {
+        console.error("Error loading notifications", err);
+      }
+    }
+
+    checkNotifications();
   }, [location.pathname]);
 
   async function handleLogout() {
@@ -614,14 +629,31 @@ export default function AppLayout() {
                 gap: 8,
               }}
             >
-              <button
-                type="button"
-                style={headerButtonStyle}
-                aria-label="Notificaciones"
-                onClick={() => navigate("/notifications")}
-              >
-                <BellIcon mobile={isMobile} />
-              </button>
+              <div style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  style={headerButtonStyle}
+                  aria-label="Notificaciones"
+                  onClick={() => navigate("/notifications")}
+                >
+                  <BellIcon mobile={isMobile} />
+                </button>
+
+                {hasNotifications && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: 4,
+                      right: 4,
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      background: "#ef4444",
+                      border: "2px solid white",
+                    }}
+                  />
+                )}
+              </div>
 
               <button
                 type="button"

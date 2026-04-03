@@ -1,5 +1,5 @@
 import { api } from "@/lib/axios";
-import type { Invoice } from "./invoices.types";
+import type { Invoice, AutomationRecommendation } from "./invoices.types";
 
 export async function getInvoices(subscriptionId: string): Promise<Invoice[]> {
   const res = await api.get<Invoice[]>("/invoices", {
@@ -57,5 +57,12 @@ export async function getCollectionEvents(invoiceId: string) {
   const res = await api.get("/collection-events", {
     params: { invoiceId },
   });
+  return res.data;
+}
+export async function getAutomationRecommendations(accountId?: string) {
+  const res = await api.get<AutomationRecommendation[]>("/automation/recommendations", {
+    params: accountId ? { accountId } : undefined,
+  });
+
   return res.data;
 }

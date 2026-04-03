@@ -21,3 +21,22 @@ export type Invoice = {
   updatedAt: string;
   items?: InvoiceItem[];
 };
+export type RecommendationAction =
+  | "none"
+  | "send_reminder"
+  | "send_firm_message";
+
+export type RecommendationPriority = "low" | "medium" | "high";
+
+export type AutomationRecommendation = {
+  invoiceId: string;
+  subscriptionId: string;
+  action: RecommendationAction;
+  priority: RecommendationPriority;
+  label: string;
+  reason: string;
+  daysLate: number;
+  dueDate: string;
+  status: string;
+  total: number;
+};

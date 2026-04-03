@@ -332,3 +332,9 @@ model InvoiceItem {
 
   @@index([invoiceId])
 }
+model AutomationRun {
+  id              String   @id @default(cuid())
+  executedAt      DateTime @default(now())
+  totalInvoices   Int
+  recommendations Int
+}

@@ -4,19 +4,25 @@ import {
   generateCollectionMessage,
   createCollectionEvent,
   getCollectionEvents,
+  getAutomationRecommendations,
 } from "./invoices.api";
+import type { Invoice, AutomationRecommendation } from "./invoices.types";
 import { getSubscriptions } from "@/features/subscriptions/subscriptions.api";
-import type { Invoice } from "./invoices.types";
 import type { Subscription } from "@/features/subscriptions/subscriptions.types";
 import { EmptyState } from "@/components/EmptyState";
-
 
 type UiState =
   | { status: "loading" }
   | { status: "error"; message: string }
   | { status: "success"; data: Invoice[]; warnings?: string[] };
 
-type InvoiceView = "pending" | "all" | "paid" | "failed";
+type InvoiceView =
+  | "overdue"
+  | "upcoming"
+  | "pending"
+  | "all"
+  | "paid"
+  | "failed";
 
 type EnrichedInvoice = Invoice & {
   tenantName: string;
@@ -81,6 +87,249 @@ function normalizeError(err: any): string {
   return Array.isArray(msg) ? msg.join("\n") : String(msg);
 }
 
+function getInvoiceTiming(dueDate?: string) {
+  if (!dueDate) return "pending";
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const due = new Date(dueDate);
+  due.setHours(0, 0, 0, 0);
+
+  const diffMs = due.getTime() - today.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) return "overdue";
+  if (diffDays <= 5) return "upcoming";
+  return "pending";
+}
+
+function getDaysInfo(dueDate?: string) {
+  if (!dueDate) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const due = new Date(dueDate);
+  due.setHours(0, 0, 0, 0);
+
+  const diffMs = today.getTime() - due.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays > 0) {
+    return {
+      label: `${diffDays} día${diffDays === 1 ? "" : "s"} de atraso`,
+      type: "overdue" as const,
+    };
+  }
+
+  if (diffDays < 0) {
+    const daysToDue = Math.abs(diffDays);
+    if (daysToDue <= 5) {
+      return {
+        label: `Vence en ${daysToDue} día${daysToDue === 1 ? "" : "s"}`,
+        type: "upcoming" as const,
+      };
+    }
+  }
+
+  return null;
+}
+
+function RecommendationSummary({
+  recommendations,
+  onGoToRecommendation,
+}: {
+  recommendations: AutomationRecommendation[];
+  onGoToRecommendation: (invoiceId: string) => void;
+}) {
+  const high = recommendations.filter((r) => r.priority === "high").length;
+  const medium = recommendations.filter((r) => r.priority === "medium").length;
+  const topRecommendation = recommendations[0];
+
+  return (
+    <div
+      style={{
+        marginTop: 16,
+        padding: 16,
+        borderRadius: 20,
+        background: "#ffffff",
+        border: "1px solid #eef2f7",
+        boxShadow: "0 8px 24px rgba(15,23,42,0.04)",
+        display: "grid",
+        gap: 14,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: "#64748b",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+            }}
+          >
+            Gestión sugerida de cobros
+          </div>
+
+          <div
+            style={{
+              marginTop: 4,
+              fontSize: 14,
+              color: "#475569",
+              lineHeight: 1.45,
+            }}
+          >
+            {recommendations.length} acción
+            {recommendations.length === 1 ? "" : "es"} recomendada
+            {recommendations.length === 1 ? "" : "s"} para revisar hoy.
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              const facturasSection = document.getElementById("facturas-listado");
+              if (facturasSection) {
+                facturasSection.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+              }
+            }}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 14,
+              border: "1px solid #e2e8f0",
+              background: "#ffffff",
+              color: "#334155",
+              fontWeight: 800,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Revisar cobros
+          </button>
+
+          {topRecommendation && (
+            <button
+              type="button"
+              onClick={() => onGoToRecommendation(topRecommendation.invoiceId)}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 14,
+                border: "1px solid rgba(91,78,230,0.18)",
+                background: "rgba(91,78,230,0.08)",
+                color: "#5b4ee6",
+                fontWeight: 800,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Cobrar siguiente
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+        }}
+      >
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "8px 12px",
+            borderRadius: 999,
+            background: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            fontSize: 12,
+            fontWeight: 700,
+            color: "#334155",
+          }}
+        >
+          Total: {recommendations.length}
+        </span>
+
+        {high > 0 && (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "8px 12px",
+              borderRadius: 999,
+              background: "#fee2e2",
+              border: "1px solid #fecaca",
+              fontSize: 12,
+              fontWeight: 700,
+              color: "#991b1b",
+            }}
+          >
+            Alta prioridad: {high}
+          </span>
+        )}
+
+        {medium > 0 && (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "8px 12px",
+              borderRadius: 999,
+              background: "#fef3c7",
+              border: "1px solid #fde68a",
+              fontSize: 12,
+              fontWeight: 700,
+              color: "#92400e",
+            }}
+          >
+            Prioridad media: {medium}
+          </span>
+        )}
+
+        {topRecommendation && (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "8px 12px",
+              borderRadius: 999,
+              background: "#eef2ff",
+              border: "1px solid #c7d2fe",
+              fontSize: 12,
+              fontWeight: 700,
+              color: "#4338ca",
+            }}
+          >
+            Siguiente: {topRecommendation.label}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function StatusBadge({
   status,
   dueDate,
@@ -103,29 +352,16 @@ function StatusBadge({
     color = "#991b1b";
     label = "Fallida";
   } else if (s === "pending") {
-    if (dueDate) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+    const timing = getInvoiceTiming(dueDate);
 
-      const due = new Date(dueDate);
-      due.setHours(0, 0, 0, 0);
-
-      const diffMs = due.getTime() - today.getTime();
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-      if (diffDays < 0) {
-        bg = "#fee2e2";
-        color = "#991b1b";
-        label = "Pago vencido";
-      } else if (diffDays <= 5) {
-        bg = "#fef9c3";
-        color = "#854d0e";
-        label = "Próximo a vencer";
-      } else {
-        bg = "#fef3c7";
-        color = "#92400e";
-        label = "Pendiente";
-      }
+    if (timing === "overdue") {
+      bg = "#fee2e2";
+      color = "#991b1b";
+      label = "Pago vencido";
+    } else if (timing === "upcoming") {
+      bg = "#fef9c3";
+      color = "#854d0e";
+      label = "Próximo a vencer";
     } else {
       bg = "#fef3c7";
       color = "#92400e";
@@ -369,6 +605,7 @@ function InvoiceCard({
 }) {
   const hasItems = (invoice.items ?? []).length > 0;
   const canCollect = invoice.status === "pending";
+  const daysInfo = getDaysInfo(invoice.dueDate);
 
   return (
     <div
@@ -492,6 +729,18 @@ function InvoiceCard({
         </div>
       </div>
 
+      {daysInfo && (
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: daysInfo.type === "overdue" ? "#991b1b" : "#92400e",
+          }}
+        >
+          {daysInfo.label}
+        </div>
+      )}
+
       <div
         style={{
           display: "flex",
@@ -539,51 +788,51 @@ function InvoiceCard({
       </div>
 
       {expanded && (
-  <>
-    <InvoiceDetail invoice={invoice} />
+        <>
+          <InvoiceDetail invoice={invoice} />
 
-    <div
-      style={{
-        marginTop: 10,
-        padding: 12,
-        borderRadius: 16,
-        background: "#f8fafc",
-        border: "1px solid #e2e8f0",
-        display: "grid",
-        gap: 6,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 12,
-          fontWeight: 700,
-          color: "#64748b",
-          textTransform: "uppercase",
-        }}
-      >
-        Historial de cobranza
-      </div>
+          <div
+            style={{
+              marginTop: 10,
+              padding: 12,
+              borderRadius: 16,
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              display: "grid",
+              gap: 6,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#64748b",
+                textTransform: "uppercase",
+              }}
+            >
+              Historial de cobranza
+            </div>
 
-      {events.length === 0 && (
-        <div style={{ fontSize: 12, color: "#94a3b8" }}>
-          Sin acciones registradas
-        </div>
+            {events.length === 0 && (
+              <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                Sin acciones registradas
+              </div>
+            )}
+
+            {events.map((e: any) => (
+              <div
+                key={e.id}
+                style={{
+                  fontSize: 13,
+                  color: "#0f172a",
+                }}
+              >
+                {new Date(e.createdAt).toLocaleDateString("es-CL")} → WhatsApp abierto
+              </div>
+            ))}
+          </div>
+        </>
       )}
-
-      {events.map((e: any) => (
-        <div
-          key={e.id}
-          style={{
-            fontSize: 13,
-            color: "#0f172a",
-          }}
-        >
-          {new Date(e.createdAt).toLocaleDateString("es-CL")} → WhatsApp abierto
-        </div>
-      ))}
-    </div>
-  </>
-)}
     </div>
   );
 }
@@ -595,12 +844,15 @@ export default function InvoicesPage() {
   const [selectedSubId, setSelectedSubId] = useState<string>(ALL);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [currentView, setCurrentView] = useState<InvoiceView>("pending");
+  const [currentView, setCurrentView] = useState<InvoiceView>("overdue");
   const [ui, setUi] = useState<UiState>({ status: "loading" });
   const [collectingId, setCollectingId] = useState<string | null>(null);
-  const [eventsByInvoice, setEventsByInvoice] = useState<
-Record<string, any[]>
->({});
+  const [eventsByInvoice, setEventsByInvoice] = useState<Record<string, any[]>>(
+    {}
+  );
+  const [recommendations, setRecommendations] = useState<
+    AutomationRecommendation[]
+  >([]);
 
   const [collectionModalOpen, setCollectionModalOpen] = useState(false);
   const [collectionMessage, setCollectionMessage] = useState("");
@@ -767,6 +1019,18 @@ Record<string, any[]>
     }
   }
 
+  function handleGoToRecommendation(invoiceId: string) {
+    const invoice = enrichedInvoices.find((item) => item.id === invoiceId);
+
+    if (!invoice) return;
+
+    setSelectedSubId(invoice.subscriptionId);
+    setCurrentView("overdue");
+    setExpandedId(invoice.id);
+
+    void handleCollect(invoice);
+  }
+
   useEffect(() => {
     setExpandedId(null);
   }, [selectedSubId, currentView, searchTerm]);
@@ -777,41 +1041,74 @@ Record<string, any[]>
   }, [selectedSubId]);
 
   useEffect(() => {
-  async function loadEvents() {
-    if (ui.status !== "success") return;
+    async function loadEvents() {
+      if (ui.status !== "success") return;
 
-    const map: Record<string, any[]> = {};
+      const map: Record<string, any[]> = {};
 
-    for (const inv of ui.data) {
+      for (const inv of ui.data) {
+        try {
+          const events = await getCollectionEvents(inv.id);
+          map[inv.id] = events;
+        } catch (err) {
+          console.error("Error loading events", err);
+        }
+      }
+
+      setEventsByInvoice(map);
+    }
+
+    loadEvents();
+  }, [ui]);
+
+  useEffect(() => {
+    async function loadRecommendations() {
       try {
-        const events = await getCollectionEvents(inv.id);
-        map[inv.id] = events;
+        const data = await getAutomationRecommendations();
+        setRecommendations(data);
       } catch (err) {
-        console.error("Error loading events", err);
+        console.error("Error loading recommendations", err);
       }
     }
 
-    setEventsByInvoice(map);
-  }
-
-  loadEvents();
-}, [ui]);
+    loadRecommendations();
+  }, []);
 
   const stats = useMemo(() => {
     if (ui.status !== "success") return null;
 
     const total = ui.data.length;
     const paid = ui.data.filter((i) => i.status === "paid").length;
-    const pendingInvoices = ui.data.filter((i) => i.status === "pending");
-    const pending = pendingInvoices.length;
     const failed = ui.data.filter((i) => i.status === "failed").length;
 
-    const pendingAmount = pendingInvoices.reduce(
+    const pendingInvoices = ui.data.filter((i) => i.status === "pending");
+
+    const overdueInvoices = pendingInvoices.filter(
+      (i) => getInvoiceTiming(i.dueDate) === "overdue"
+    );
+    const upcomingInvoices = pendingInvoices.filter(
+      (i) => getInvoiceTiming(i.dueDate) === "upcoming"
+    );
+
+    const overdueAmount = overdueInvoices.reduce(
       (sum, i) => sum + (Number(i.total) || 0),
       0
     );
 
-    return { total, paid, pending, failed, pendingAmount };
+    const upcomingAmount = upcomingInvoices.reduce(
+      (sum, i) => sum + (Number(i.total) || 0),
+      0
+    );
+
+    return {
+      total,
+      paid,
+      failed,
+      overdue: overdueInvoices.length,
+      upcoming: upcomingInvoices.length,
+      overdueAmount,
+      upcomingAmount,
+    };
   }, [ui]);
 
   const enrichedInvoices = useMemo<EnrichedInvoice[]>(() => {
@@ -838,8 +1135,18 @@ Record<string, any[]>
   const filteredInvoices = useMemo(() => {
     let result = enrichedInvoices;
 
-    if (currentView === "pending") {
-      result = result.filter((i) => i.status === "pending");
+    if (currentView === "overdue") {
+      result = result.filter(
+        (i) => i.status === "pending" && getInvoiceTiming(i.dueDate) === "overdue"
+      );
+    } else if (currentView === "upcoming") {
+      result = result.filter(
+        (i) => i.status === "pending" && getInvoiceTiming(i.dueDate) === "upcoming"
+      );
+    } else if (currentView === "pending") {
+      result = result.filter(
+        (i) => i.status === "pending" && getInvoiceTiming(i.dueDate) === "pending"
+      );
     } else if (currentView === "paid") {
       result = result.filter((i) => i.status === "paid");
     } else if (currentView === "failed") {
@@ -862,11 +1169,21 @@ Record<string, any[]>
     return result;
   }, [enrichedInvoices, currentView, selectedSubId, searchTerm]);
 
+  const visibleRecommendations = useMemo(() => {
+    if (selectedSubId === ALL) return recommendations;
+
+    return recommendations.filter(
+      (item) => item.subscriptionId === selectedSubId
+    );
+  }, [recommendations, selectedSubId]);
+
   const currentViewLabel = useMemo(() => {
     if (currentView === "all") return "Todas";
     if (currentView === "paid") return "Pagadas";
     if (currentView === "failed") return "Fallidas";
-    return "Pendientes";
+    if (currentView === "upcoming") return "Próximas a vencer";
+    if (currentView === "pending") return "Pendientes";
+    return "Vencidas";
   }, [currentView]);
 
   return (
@@ -918,6 +1235,13 @@ Record<string, any[]>
           />
         </section>
 
+        {visibleRecommendations.length > 0 && (
+          <RecommendationSummary
+            recommendations={visibleRecommendations}
+            onGoToRecommendation={handleGoToRecommendation}
+          />
+        )}
+
         {stats && (
           <div
             style={{
@@ -929,83 +1253,25 @@ Record<string, any[]>
               gap: 12,
             }}
           >
-{ui.status === "success" && (
-  <div
-    style={{
-      marginTop: 12,
-      padding: 14,
-      borderRadius: 18,
-      background: "#ffffff",
-      border: "1px solid #eef2f7",
-      boxShadow: "0 6px 20px rgba(15,23,42,0.04)",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      gap: 12,
-      flexWrap: "wrap",
-    }}
-  >
-    <div>
-      <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>
-        Score de pago
-      </div>
-      <div style={{ fontSize: 20, fontWeight: 800, color: "#0f172a" }}>
-        {Math.max(
-          0,
-          100 -
-            ui.data.filter((i) => i.status === "pending").length * 10 -
-            Object.values(eventsByInvoice).reduce(
-              (sum, e) => sum + (e?.length || 0),
-              0
-            ) *
-              5
-        )}
-      </div>
-    </div>
-
-    <div
-      style={{
-        fontSize: 12,
-        fontWeight: 700,
-        color: "#64748b",
-      }}
-    >
-      {(() => {
-        const score =
-          100 -
-          ui.data.filter((i) => i.status === "pending").length * 10 -
-          Object.values(eventsByInvoice).reduce(
-            (sum, e) => sum + (e?.length || 0),
-            0
-          ) *
-            5;
-
-        if (score >= 80) return "🟢 Buen pagador";
-        if (score >= 50) return "🟡 Riesgo medio";
-        return "🔴 Alto riesgo";
-      })()}
-    </div>
-  </div>
-)}
-
             <StatCard
-              label="Pendientes"
-              value={formatCLP(stats.pendingAmount)}
-              subtitle={`${stats.pending} factura${stats.pending === 1 ? "" : "s"}`}
-              active={currentView === "pending"}
-              onClick={() => setCurrentView("pending")}
+              label="Vencidas"
+              value={formatCLP(stats.overdueAmount)}
+              subtitle={`${stats.overdue} factura${stats.overdue === 1 ? "" : "s"}`}
+              active={currentView === "overdue"}
+              onClick={() => setCurrentView("overdue")}
+            />
+            <StatCard
+              label="Próximas a vencer"
+              value={formatCLP(stats.upcomingAmount)}
+              subtitle={`${stats.upcoming} factura${stats.upcoming === 1 ? "" : "s"}`}
+              active={currentView === "upcoming"}
+              onClick={() => setCurrentView("upcoming")}
             />
             <StatCard
               label="Pagadas"
               value={stats.paid}
               active={currentView === "paid"}
               onClick={() => setCurrentView("paid")}
-            />
-            <StatCard
-              label="Fallidas"
-              value={stats.failed}
-              active={currentView === "failed"}
-              onClick={() => setCurrentView("failed")}
             />
             <StatCard
               label="Total"
@@ -1116,11 +1382,12 @@ Record<string, any[]>
               fontWeight: 600,
             }}
           >
-            Algunas facturas no pudieron cargarse.
+            Algunos contratos no pudieron cargarse correctamente.
+            Puedes seguir trabajando sin problema.
             <details style={{ marginTop: 8 }}>
               <summary>Ver detalles</summary>
               <pre style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>
-                {ui.warnings.join("\n\n")}
+                {ui.warnings?.join("\n\n")}
               </pre>
             </details>
           </div>
@@ -1174,21 +1441,22 @@ Record<string, any[]>
           )}
 
         {ui.status === "success" && filteredInvoices.length > 0 && (
-          <>
+          <div id="facturas-listado">
             {isMobile ? (
               <div style={{ display: "grid", gap: 12 }}>
                 {filteredInvoices.map((inv) => (
-               <InvoiceCard
-                key={inv.id}
-                invoice={inv}
-                expanded={expandedId === inv.id}
-                onToggle={() =>
-                  setExpandedId((prev) => (prev === inv.id ? null : inv.id))
-                }
-                onCollect={() => handleCollect(inv)}
-                collecting={collectingId === inv.id}
-                events={eventsByInvoice[inv.id] ?? []}
-              />
+                  <div key={inv.id} id={`invoice-row-${inv.id}`}>
+                    <InvoiceCard
+                      invoice={inv}
+                      expanded={expandedId === inv.id}
+                      onToggle={() =>
+                        setExpandedId((prev) => (prev === inv.id ? null : inv.id))
+                      }
+                      onCollect={() => handleCollect(inv)}
+                      collecting={collectingId === inv.id}
+                      events={eventsByInvoice[inv.id] ?? []}
+                    />
+                  </div>
                 ))}
               </div>
             ) : (
@@ -1232,7 +1500,7 @@ Record<string, any[]>
 
                       return (
                         <Fragment key={inv.id}>
-                          <tr>
+                          <tr id={`invoice-row-${inv.id}`}>
                             <td style={td}>
                               <div style={{ fontWeight: 700 }}>{inv.tenantName}</div>
                               <div style={{ fontSize: 12, color: "#64748b" }}>
@@ -1257,7 +1525,30 @@ Record<string, any[]>
 
                             <td style={td}>{formatDateTime(inv.createdAt)}</td>
 
-                            <td style={td}>{formatDate(inv.dueDate)}</td>
+                            <td style={td}>
+                              <div>{formatDate(inv.dueDate)}</div>
+
+                              {(() => {
+                                const info = getDaysInfo(inv.dueDate);
+                                if (!info) return null;
+
+                                return (
+                                  <div
+                                    style={{
+                                      marginTop: 4,
+                                      fontSize: 12,
+                                      fontWeight: 700,
+                                      color:
+                                        info.type === "overdue"
+                                          ? "#991b1b"
+                                          : "#92400e",
+                                    }}
+                                  >
+                                    {info.label}
+                                  </div>
+                                );
+                              })()}
+                            </td>
 
                             <td style={td}>
                               {hasItems ? (
@@ -1315,61 +1606,64 @@ Record<string, any[]>
                             </td>
                           </tr>
 
-                         {isExpanded && (
-  <tr>
-    <td
-      colSpan={9}
-      style={{
-        ...td,
-        background: "#ffffff",
-      }}
-    >
-      <div style={{ display: "grid", gap: 12 }}>
-        {hasItems ? <InvoiceDetail invoice={inv} /> : null}
+                          {isExpanded && (
+                            <tr>
+                              <td
+                                colSpan={9}
+                                style={{
+                                  ...td,
+                                  background: "#ffffff",
+                                }}
+                              >
+                                <div style={{ display: "grid", gap: 12 }}>
+                                  {hasItems ? <InvoiceDetail invoice={inv} /> : null}
 
-        <div
-          style={{
-            padding: 12,
-            borderRadius: 16,
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
-            display: "grid",
-            gap: 6,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 12,
-              fontWeight: 700,
-              color: "#64748b",
-              textTransform: "uppercase",
-            }}
-          >
-            Historial de cobranza
-          </div>
+                                  <div
+                                    style={{
+                                      padding: 12,
+                                      borderRadius: 16,
+                                      background: "#f8fafc",
+                                      border: "1px solid #e2e8f0",
+                                      display: "grid",
+                                      gap: 6,
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        fontSize: 12,
+                                        fontWeight: 700,
+                                        color: "#64748b",
+                                        textTransform: "uppercase",
+                                      }}
+                                    >
+                                      Historial de cobranza
+                                    </div>
 
-          {(eventsByInvoice[inv.id] ?? []).length === 0 && (
-            <div style={{ fontSize: 12, color: "#94a3b8" }}>
-              Sin acciones registradas
-            </div>
-          )}
+                                    {(eventsByInvoice[inv.id] ?? []).length === 0 && (
+                                      <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                                        Sin acciones registradas
+                                      </div>
+                                    )}
 
-          {(eventsByInvoice[inv.id] ?? []).map((e: any) => (
-            <div
-              key={e.id}
-              style={{
-                fontSize: 13,
-                color: "#0f172a",
-              }}
-            >
-              {new Date(e.createdAt).toLocaleDateString("es-CL")} → WhatsApp abierto
-            </div>
-          ))}
-        </div>
-      </div>
-    </td>
-  </tr>
-)}
+                                    {(eventsByInvoice[inv.id] ?? []).map((e: any) => (
+                                      <div
+                                        key={e.id}
+                                        style={{
+                                          fontSize: 13,
+                                          color: "#0f172a",
+                                        }}
+                                      >
+                                        {new Date(e.createdAt).toLocaleDateString(
+                                          "es-CL"
+                                        )}{" "}
+                                        → WhatsApp abierto
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
                         </Fragment>
                       );
                     })}
@@ -1377,7 +1671,7 @@ Record<string, any[]>
                 </table>
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
 
@@ -1434,7 +1728,8 @@ Record<string, any[]>
                   lineHeight: 1.5,
                 }}
               >
-                Revísalo, ajusta el texto si quieres y luego ábrelo en WhatsApp para enviarlo.
+                Revísalo, ajusta el texto si quieres y luego ábrelo en WhatsApp para
+                enviarlo.
               </div>
             </div>
 
