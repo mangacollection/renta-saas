@@ -7,7 +7,7 @@ import {
 } from "./account.api";
 import type { AccountPlan, AccountProfile } from "./account.types";
 
-const BILLING_PHONE = "569XXXXXXXX";
+const BILLING_PHONE = import.meta.env.VITE_BILLING_PHONE ?? "";
 
 function formatCLP(value: number) {
   return new Intl.NumberFormat("es-CL", {
@@ -53,10 +53,14 @@ function getStatusMessage(plan: AccountPlan) {
 }
 
 function getWhatsAppLink(phone: string) {
+  if (!phone) return "#";
+
+  const normalizedPhone = phone.replace(/\D/g, "");
   const text = encodeURIComponent(
     "Hola, quiero pagar mi suscripción de RentaControl"
   );
-  return `https://wa.me/${phone}?text=${text}`;
+
+  return `https://wa.me/${normalizedPhone}?text=${text}`;
 }
 
 function sanitizePhoneInput(value: string) {
@@ -319,6 +323,12 @@ export default function AccountPage() {
     };
   }, [plan]);
 
+  const billingWhatsAppUrl = useMemo(() => {
+    return getWhatsAppLink(BILLING_PHONE);
+  }, []);
+
+  const isBillingPhoneConfigured = BILLING_PHONE.trim().length > 0;
+
   async function handleSavePhone() {
     try {
       setSavingPhone(true);
@@ -326,8 +336,8 @@ export default function AccountPage() {
       setProfileError(null);
 
       const valueToSave = phoneInput.trim()
-  ? normalizeChileMobilePhone(phoneInput)
-  : "";
+        ? normalizeChileMobilePhone(phoneInput)
+        : "";
 
       const updated = await updateAccountProfile({
         phone: valueToSave || undefined,
@@ -398,26 +408,39 @@ export default function AccountPage() {
             {statusMessage}
           </div>
 
-          <a
-            href={getWhatsAppLink(BILLING_PHONE)}
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              alignSelf: "flex-start",
-              marginTop: 2,
-              padding: "9px 14px",
-              borderRadius: 999,
-              border: "none",
-              background:
-                plan.billingStatus === "past_due" ? "#dc2626" : "#25d366",
-              color: "#ffffff",
-              fontWeight: 700,
-              textDecoration: "none",
-              fontSize: 14,
-            }}
-          >
-            Pagar suscripción
-          </a>
+          {isBillingPhoneConfigured ? (
+            <a
+              href={billingWhatsAppUrl}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                alignSelf: "flex-start",
+                marginTop: 2,
+                padding: "9px 14px",
+                borderRadius: 999,
+                border: "none",
+                background:
+                  plan.billingStatus === "past_due" ? "#dc2626" : "#25d366",
+                color: "#ffffff",
+                fontWeight: 700,
+                textDecoration: "none",
+                fontSize: 14,
+              }}
+            >
+              Pagar suscripción
+            </a>
+          ) : (
+            <div
+              style={{
+                marginTop: 2,
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#991b1b",
+              }}
+            >
+              Falta configurar VITE_BILLING_PHONE en el frontend.
+            </div>
+          )}
         </div>
       )}
 
