@@ -161,7 +161,64 @@ export default function AccountPage() {
         margin: "0 auto",
         fontFamily: "Inter, system-ui, sans-serif",
       }}
+      
     >
+      // 👇 AGREGA ESTE BLOQUE JUSTO ANTES DEL HEADER
+
+{plan?.billingStatus === "past_due" && (
+  <div
+    style={{
+      marginBottom: 16,
+      padding: "14px 16px",
+      borderRadius: 16,
+      background: "#fee2e2",
+      border: "1px solid #fecaca",
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+    }}
+  >
+    <div
+      style={{
+        fontSize: 14,
+        fontWeight: 700,
+        color: "#991b1b",
+      }}
+    >
+      ⚠️ Tu suscripción está vencida
+    </div>
+
+    <div
+      style={{
+        fontSize: 13,
+        color: "#7f1d1d",
+        lineHeight: 1.5,
+      }}
+    >
+      Puedes seguir revisando tu información, pero no podrás crear ni modificar
+      contratos hasta regularizar el pago.
+    </div>
+
+    <button
+      style={{
+        alignSelf: "flex-start",
+        marginTop: 6,
+        padding: "8px 14px",
+        borderRadius: 999,
+        border: "none",
+        background: "#dc2626",
+        color: "#fff",
+        fontWeight: 700,
+        cursor: "pointer",
+      }}
+      onClick={() => {
+        alert("Aquí luego conectamos flujo de pago 💰");
+      }}
+    >
+      Regularizar pago
+    </button>
+  </div>
+)}
       {/* HEADER */}
       <section
         style={{

@@ -17,10 +17,12 @@ import HelpPage from "@/pages/HelpPage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
+
   {
     path: "/",
     element: <ProtectedRoute />,
     children: [
+      // 🔹 OWNER APP (con layout)
       {
         element: <AppLayout />,
         children: [
@@ -33,12 +35,14 @@ export const router = createBrowserRouter([
           { path: "menu", element: <MenuPage /> },
           { path: "notifications", element: <NotificationsPage /> },
           { path: "help", element: <HelpPage /> },
-          { path: "admin/account-payments", element: <AdminAccountPaymentsPage /> },
-          { path: "admin/accounts", element: <AdminAccountsPage /> },
-          
         ],
       },
+
+      // 🔥 ADMIN SIN LAYOUT
+      { path: "admin/account-payments", element: <AdminAccountPaymentsPage /> },
+      { path: "admin/accounts", element: <AdminAccountsPage /> },
     ],
   },
+
   { path: "*", element: <NotFoundPage /> },
 ]);

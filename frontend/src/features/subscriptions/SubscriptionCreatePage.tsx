@@ -9,6 +9,7 @@ import {
   updateSubscriptionDraft,
 } from "./subscriptions.api";
 import { ItemsEditor, type DraftItem } from "./components/ItemsEditor";
+import { getAccountPlan } from "@/features/account/account.api";
 
 function normalizeError(err: any): string {
   const msg = err?.response?.data?.message ?? err?.message ?? "Error";
@@ -512,6 +513,8 @@ export function SubscriptionCreatePage() {
   const subscriptionIdFromQuery = searchParams.get("subscriptionId");
   const isMobile = useIsMobile();
 
+  const [isBlocked, setIsBlocked] = useState(false);
+
   const [tenantName, setTenantName] = useState("");
   const [tenantRut, setTenantRut] = useState("");
   const [tenantEmail, setTenantEmail] = useState("");
@@ -575,6 +578,21 @@ export function SubscriptionCreatePage() {
       0
     );
   }, [initialCharges]);
+
+  useEffect(() => {
+    async function loadPlan() {
+      try {
+        const plan = await getAccountPlan();
+        if (plan.billingStatus === "past_due") {
+          setIsBlocked(true);
+        }
+      } catch {
+        // noop
+      }
+    }
+
+    void loadPlan();
+  }, []);
 
   useEffect(() => {
     async function loadDraft() {
@@ -672,6 +690,8 @@ export function SubscriptionCreatePage() {
   }
 
   async function saveInitialChargesDraft(showSuccess = true) {
+    if (loading || isBlocked) return;
+
     if (!subscriptionId) {
       setError("Primero guarda los datos del arrendatario.");
       return false;
@@ -728,7 +748,7 @@ export function SubscriptionCreatePage() {
   }
 
   async function selectChargeMode(nextHasInitialCharges: boolean) {
-    if (loading) return;
+    if (loading || isBlocked) return;
 
     setInitialChargesError(null);
     setInitialChargesSuccess(null);
@@ -780,12 +800,14 @@ export function SubscriptionCreatePage() {
   }
 
   function addInitialCharge() {
+    if (isBlocked) return;
     setInitialCharges((prev) => [...prev, { label: "", amount: "" }]);
     if (initialChargesError) setInitialChargesError(null);
     if (initialChargesSuccess) setInitialChargesSuccess(null);
   }
 
   function updateInitialCharge(index: number, nextValue: Partial<InitialChargeDraft>) {
+    if (isBlocked) return;
     setInitialCharges((prev) =>
       prev.map((item, idx) =>
         idx === index
@@ -802,13 +824,14 @@ export function SubscriptionCreatePage() {
   }
 
   function removeInitialCharge(index: number) {
+    if (isBlocked) return;
     setInitialCharges((prev) => prev.filter((_, idx) => idx !== index));
     if (initialChargesError) setInitialChargesError(null);
     if (initialChargesSuccess) setInitialChargesSuccess(null);
   }
 
   async function onCreate() {
-    if (loading) return;
+    if (loading || isBlocked) return;
 
     setError(null);
     setCreateSuccess(null);
@@ -907,6 +930,8 @@ export function SubscriptionCreatePage() {
   }
 
   async function handleItemsChange(nextItems: DraftItem[]) {
+    if (isBlocked) return;
+
     if (!subscriptionId) {
       setItems(nextItems);
       return;
@@ -949,7 +974,7 @@ export function SubscriptionCreatePage() {
   }
 
   async function onSaveItems() {
-    if (loading || isSavingItemsRef.current) return;
+    if (loading || isSavingItemsRef.current || isBlocked) return;
 
     setError(null);
     setItemsSuccess(null);
@@ -1038,7 +1063,7 @@ export function SubscriptionCreatePage() {
   }
 
   async function onActivate() {
-    if (loading) return;
+    if (loading || isBlocked) return;
 
     setError(null);
 
@@ -1113,6 +1138,57 @@ export function SubscriptionCreatePage() {
         margin: "0 auto",
       }}
     >
+      {isBlocked && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "14px 16px",
+            borderRadius: 16,
+            background: "#fee2e2",
+            border: "1px solid #fecaca",
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <div
+            style={{
+              fontWeight: 700,
+              color: "#991b1b",
+            }}
+          >
+            ⚠️ Tu suscripción está vencida
+          </div>
+
+          <div
+            style={{
+              fontSize: 13,
+              color: "#7f1d1d",
+            }}
+          >
+            Puedes revisar la información, pero no crear ni modificar contratos hasta regularizar el pago.
+          </div>
+
+          <button
+            style={{
+              alignSelf: "flex-start",
+              padding: "8px 14px",
+              borderRadius: 999,
+              border: "none",
+              background: "#dc2626",
+              color: "#fff",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+            onClick={() => {
+              alert("Aquí luego conectamos flujo de pago 💰");
+            }}
+          >
+            Regularizar pago
+          </button>
+        </div>
+      )}
+
       <section
         style={{
           display: "flex",
@@ -1209,7 +1285,7 @@ export function SubscriptionCreatePage() {
                 <input
                   value={tenantName}
                   onChange={(e) => setTenantName(e.target.value)}
-                  disabled={loading || step1Done}
+                  disabled={loading || step1Done || isBlocked}
                   placeholder="Ej: Juan Pérez"
                   style={inputStyle}
                 />
@@ -1231,7 +1307,7 @@ export function SubscriptionCreatePage() {
                       if (tenantRutError) setTenantRutError(null);
                       if (error) setError(null);
                     }}
-                    disabled={loading || step1Done}
+                    disabled={loading || step1Done || isBlocked}
                     placeholder="Ej: 12.345.678-5"
                     style={inputStyle}
                   />
@@ -1251,7 +1327,7 @@ export function SubscriptionCreatePage() {
                       if (tenantEmailError) setTenantEmailError(null);
                       if (error) setError(null);
                     }}
-                    disabled={loading || step1Done}
+                    disabled={loading || step1Done || isBlocked}
                     placeholder="Ej: juan@email.com"
                     style={inputStyle}
                   />
@@ -1279,7 +1355,7 @@ export function SubscriptionCreatePage() {
                       if (tenantPhoneError) setTenantPhoneError(null);
                       if (error) setError(null);
                     }}
-                    disabled={loading || step1Done}
+                    disabled={loading || step1Done || isBlocked}
                     placeholder="Ej: +56912345678"
                     style={inputStyle}
                   />
@@ -1297,7 +1373,7 @@ export function SubscriptionCreatePage() {
                     onChange={(e) =>
                       setBillingDay(e.target.value.replace(/[^\d]/g, ""))
                     }
-                    disabled={loading || step1Done}
+                    disabled={loading || step1Done || isBlocked}
                     style={inputStyle}
                     inputMode="numeric"
                   />
@@ -1313,7 +1389,7 @@ export function SubscriptionCreatePage() {
                     if (monthlyBillingStartError) setMonthlyBillingStartError(null);
                     if (error) setError(null);
                   }}
-                  disabled={loading || step1Done}
+                  disabled={loading || step1Done || isBlocked}
                   placeholder="Ej: 2026-04"
                   style={inputStyle}
                 />
@@ -1325,7 +1401,7 @@ export function SubscriptionCreatePage() {
               </div>
 
               <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                <ButtonPrimary onClick={onCreate} disabled={loading || step1Done}>
+                <ButtonPrimary onClick={onCreate} disabled={loading || step1Done || isBlocked}>
                   {step1Done
                     ? "Datos guardados"
                     : loading
@@ -1357,13 +1433,19 @@ export function SubscriptionCreatePage() {
             <ItemsEditor
               value={items}
               onChange={handleItemsChange}
-              disabled={loading}
+              disabled={loading || isBlocked}
             />
 
             {!subscriptionId && (
               <InfoNotice>
                 Puedes preparar los cargos desde ya. Para guardarlos, primero guarda los datos del arrendatario.
               </InfoNotice>
+            )}
+
+            {isBlocked && (
+              <WarningNotice>
+                Tu cuenta está en modo solo lectura. Regulariza el pago para guardar o modificar cargos.
+              </WarningNotice>
             )}
 
             {itemsInfo && <InfoNotice>{itemsInfo}</InfoNotice>}
@@ -1379,7 +1461,7 @@ export function SubscriptionCreatePage() {
             >
               <ButtonPrimary
                 onClick={onSaveItems}
-                disabled={loading || !subscriptionId || items.length === 0}
+                disabled={loading || !subscriptionId || items.length === 0 || isBlocked}
               >
                 {loading ? "Guardando..." : "Guardar cargos"}
               </ButtonPrimary>
@@ -1433,7 +1515,7 @@ export function SubscriptionCreatePage() {
                 <ChargeModeCard
                   isMobile={isMobile}
                   selected={!hasInitialCharges}
-                  disabled={loading}
+                  disabled={loading || isBlocked}
                   onClick={() => {
                     void selectChargeMode(false);
                   }}
@@ -1444,7 +1526,7 @@ export function SubscriptionCreatePage() {
                 <ChargeModeCard
                   isMobile={isMobile}
                   selected={hasInitialCharges}
-                  disabled={loading}
+                  disabled={loading || isBlocked}
                   onClick={() => {
                     void selectChargeMode(true);
                   }}
@@ -1477,7 +1559,7 @@ export function SubscriptionCreatePage() {
                           onChange={(e) =>
                             updateInitialCharge(idx, { label: e.target.value })
                           }
-                          disabled={loading}
+                          disabled={loading || isBlocked}
                           placeholder="Ej: Garantía"
                           style={inputStyle}
                         />
@@ -1488,7 +1570,7 @@ export function SubscriptionCreatePage() {
                               amount: e.target.value.replace(/[^\d]/g, ""),
                             })
                           }
-                          disabled={loading}
+                          disabled={loading || isBlocked}
                           placeholder="Monto"
                           style={inputStyle}
                           inputMode="numeric"
@@ -1496,7 +1578,7 @@ export function SubscriptionCreatePage() {
                         <ButtonSoft
                           type="button"
                           onClick={() => removeInitialCharge(idx)}
-                          disabled={loading}
+                          disabled={loading || isBlocked}
                         >
                           Quitar
                         </ButtonSoft>
@@ -1515,7 +1597,7 @@ export function SubscriptionCreatePage() {
                     <ButtonSoft
                       type="button"
                       onClick={addInitialCharge}
-                      disabled={loading}
+                      disabled={loading || isBlocked}
                     >
                       + Agregar cargo inicial
                     </ButtonSoft>
@@ -1525,7 +1607,7 @@ export function SubscriptionCreatePage() {
                       onClick={() => {
                         void saveInitialChargesDraft(true);
                       }}
-                      disabled={loading || !subscriptionId}
+                      disabled={loading || !subscriptionId || isBlocked}
                     >
                       {loading ? "Guardando..." : "Guardar pagos iniciales"}
                     </ButtonPrimary>
@@ -1557,7 +1639,7 @@ export function SubscriptionCreatePage() {
               setActiveStep(activeStep === "activation" ? "monthly" : "activation");
               scrollToSection(activationSectionRef);
             }}
-            disabled={!subscriptionId || !step2Done || !step3Done}
+            disabled={!subscriptionId || !step2Done || !step3Done || isBlocked}
             summary={activationSummary}
           >
             <div
@@ -1589,10 +1671,16 @@ export function SubscriptionCreatePage() {
                 )}
               </div>
 
+              {isBlocked && (
+                <WarningNotice>
+                  Tu cuenta está en modo solo lectura. Regulariza el pago para activar contratos.
+                </WarningNotice>
+              )}
+
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <ButtonPrimary
                   onClick={onActivate}
-                  disabled={loading || !subscriptionId || !step2Done || !step3Done}
+                  disabled={loading || !subscriptionId || !step2Done || !step3Done || isBlocked}
                 >
                   {loading ? "Activando..." : "Activar contrato"}
                 </ButtonPrimary>

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
 import { getSubscriptions } from "./subscriptions.api";
 import { generateMonthAuto } from "@/features/invoices/invoices.api";
+import { getAccountPlan } from "@/features/account/account.api";
 import type { Subscription } from "./subscriptions.types";
 import { setPageTitle } from "@/lib/pageTitle";
 import { EmptyState } from "@/components/EmptyState";
@@ -116,10 +117,12 @@ function StatusBadge({
   status,
   subscriptionId,
   onClick,
+  blocked = false,
 }: {
   status: Subscription["status"];
   subscriptionId: string;
   onClick?: (id: string) => void;
+  blocked?: boolean;
 }) {
   const s = String(status).toLowerCase();
 
@@ -151,6 +154,7 @@ function StatusBadge({
     <span
       onClick={(e) => {
         e.stopPropagation();
+        if (blocked) return;
         if (clickable) onClick?.(subscriptionId);
       }}
       style={{
@@ -166,9 +170,10 @@ function StatusBadge({
         color,
         minWidth: 96,
         textAlign: "center",
-        cursor: clickable ? "pointer" : "default",
+        cursor: clickable && !blocked ? "pointer" : "default",
         transition: "all 0.15s ease",
         border: "1px solid rgba(15,23,42,0.04)",
+        opacity: blocked && clickable ? 0.7 : 1,
       }}
     >
       {label}
@@ -341,9 +346,11 @@ function SubscriptionItemsDetail({ items }: { items: Subscription["items"] }) {
 function SubscriptionCard({
   subscription,
   onOpenDraft,
+  blocked = false,
 }: {
   subscription: Subscription;
   onOpenDraft: (id: string) => void;
+  blocked?: boolean;
 }) {
   const total = sumItems(subscription);
   const nextBillingDate = getNextBillingDate(subscription.billingDay);
@@ -355,6 +362,7 @@ function SubscriptionCard({
   return (
     <div
       onClick={() => {
+        if (blocked) return;
         if (isDraft) {
           onOpenDraft(subscription.id);
         }
@@ -367,7 +375,8 @@ function SubscriptionCard({
         boxShadow: "0 10px 28px rgba(15,23,42,0.05)",
         display: "grid",
         gap: 14,
-        cursor: isDraft ? "pointer" : "default",
+        cursor: isDraft && !blocked ? "pointer" : "default",
+        opacity: blocked && isDraft ? 0.85 : 1,
       }}
     >
       <div
@@ -405,6 +414,7 @@ function SubscriptionCard({
           status={subscription.status}
           subscriptionId={subscription.id}
           onClick={onOpenDraft}
+          blocked={blocked}
         />
       </div>
 
@@ -553,6 +563,7 @@ export function SubscriptionsPage() {
   const [isGeneratingBilling, setIsGeneratingBilling] = useState(false);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
+  const [isBlocked, setIsBlocked] = useState(false);
 
   async function load() {
     try {
@@ -569,6 +580,8 @@ export function SubscriptionsPage() {
   }
 
   async function handleGenerateBillingNow() {
+    if (isBlocked) return;
+
     try {
       setIsGeneratingBilling(true);
       setBillingError(null);
@@ -598,6 +611,23 @@ export function SubscriptionsPage() {
 
   useEffect(() => {
     setPageTitle("Contratos");
+  }, []);
+
+  useEffect(() => {
+    async function loadPlan() {
+      try {
+        const plan = await getAccountPlan();
+        if (plan.billingStatus === "past_due") {
+          setIsBlocked(true);
+        } else {
+          setIsBlocked(false);
+        }
+      } catch {
+        // noop
+      }
+    }
+
+    void loadPlan();
   }, []);
 
   useEffect(() => {
@@ -653,6 +683,47 @@ export function SubscriptionsPage() {
         margin: "0 auto",
       }}
     >
+      {isBlocked && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "14px 16px",
+            borderRadius: 16,
+            background: "#fee2e2",
+            border: "1px solid #fecaca",
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <div style={{ fontWeight: 700, color: "#991b1b" }}>
+            ⚠️ Tu suscripción está vencida
+          </div>
+
+          <div style={{ fontSize: 13, color: "#7f1d1d" }}>
+            Puedes revisar contratos, pero no crear ni modificar hasta regularizar el pago.
+          </div>
+
+          <button
+            style={{
+              alignSelf: "flex-start",
+              padding: "8px 14px",
+              borderRadius: 999,
+              border: "none",
+              background: "#dc2626",
+              color: "#fff",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+            onClick={() => {
+              alert("Aquí luego conectamos flujo de pago 💰");
+            }}
+          >
+            Regularizar pago
+          </button>
+        </div>
+      )}
+
       <section
         style={{
           display: "flex",
@@ -699,7 +770,7 @@ export function SubscriptionsPage() {
           <PrimaryButton
             type="button"
             onClick={handleGenerateBillingNow}
-            disabled={isGeneratingBilling}
+            disabled={isGeneratingBilling || isBlocked}
             style={{
               width: isMobile ? "100%" : "auto",
               background: "#ffffff",
@@ -712,7 +783,11 @@ export function SubscriptionsPage() {
           </PrimaryButton>
 
           <PrimaryButton
-            onClick={() => navigate("/subscriptions/new")}
+            onClick={() => {
+              if (isBlocked) return;
+              navigate("/subscriptions/new");
+            }}
+            disabled={isBlocked}
             style={{ width: isMobile ? "100%" : "auto" }}
           >
             + Nuevo contrato
@@ -943,7 +1018,13 @@ export function SubscriptionsPage() {
           title="Aún no tienes contratos"
           description="Crea tu primer contrato, agrega cargos y deja listo el flujo de cobro mensual."
           action={
-            <PrimaryButton onClick={() => navigate("/subscriptions/new")}>
+            <PrimaryButton
+              onClick={() => {
+                if (isBlocked) return;
+                navigate("/subscriptions/new");
+              }}
+              disabled={isBlocked}
+            >
               + Crear mi primer contrato
             </PrimaryButton>
           }
@@ -967,9 +1048,11 @@ export function SubscriptionsPage() {
                 <SubscriptionCard
                   key={s.id}
                   subscription={s}
-                  onOpenDraft={(id) =>
-                    navigate(`/subscriptions/new?subscriptionId=${id}`)
-                  }
+                  blocked={isBlocked}
+                  onOpenDraft={(id) => {
+                    if (isBlocked) return;
+                    navigate(`/subscriptions/new?subscriptionId=${id}`);
+                  }}
                 />
               ))}
             </div>
@@ -1025,9 +1108,11 @@ export function SubscriptionsPage() {
                             <StatusBadge
                               status={s.status}
                               subscriptionId={s.id}
-                              onClick={(id) =>
-                                navigate(`/subscriptions/new?subscriptionId=${id}`)
-                              }
+                              blocked={isBlocked}
+                              onClick={(id) => {
+                                if (isBlocked) return;
+                                navigate(`/subscriptions/new?subscriptionId=${id}`);
+                              }}
                             />
                           </td>
 
@@ -1094,9 +1179,7 @@ export function SubscriptionsPage() {
                                 <ChevronDownIcon expanded={isExpanded} />
                               </button>
                             ) : (
-                              <span
-                                style={{ fontSize: 12, color: "#cbd5e1" }}
-                              >
+                              <span style={{ fontSize: 12, color: "#cbd5e1" }}>
                                 —
                               </span>
                             )}

@@ -68,6 +68,10 @@ model Account {
   plan             String        @default("early_adopter")
   planPrice        Int           @default(6990)
   trialEndsAt      DateTime?
+  lastPaymentAt    DateTime?
+  nextPaymentDueAt DateTime?
+  lastReminderSentAt DateTime?
+  lastReminderType   String?
 
   accountPayments AccountPayment[]
   paymentSenders  PaymentSender[]
@@ -92,6 +96,7 @@ model AccountPayment {
   createdAt  DateTime             @default(now())
   approvedAt DateTime?
   approvedBy String?
+  hadSubscriptionBefore Boolean @default(false)
 
   account Account @relation(fields: [accountId], references: [id])
 
