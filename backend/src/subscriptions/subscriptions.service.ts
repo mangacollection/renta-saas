@@ -2,6 +2,46 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { InvoicesService } from '../invoices/invoices.service';
 
+const READ_ONLY_GRACE_DAYS = 15;
+
+async function assertAccountCanOperate(
+  prisma: PrismaService,
+  accountId: string,
+) {
+  const account = await prisma.account.findUnique({
+    where: { id: accountId },
+    select: {
+      billingStatus: true,
+      trialEndsAt: true,
+      billingStartedAt: true,
+    },
+  });
+
+  if (!account) {
+    throw new BadRequestException('Account not found');
+  }
+
+  if (account.billingStatus !== 'past_due') {
+    return;
+  }
+
+  const referenceDate =
+    account.trialEndsAt || account.billingStartedAt || new Date();
+
+  const daysPastDue = Math.floor(
+    (Date.now() - new Date(referenceDate).getTime()) /
+      (1000 * 60 * 60 * 24),
+  );
+
+  if (daysPastDue <= READ_ONLY_GRACE_DAYS) {
+    throw new BadRequestException(
+      'Cuenta en mora. Modo solo lectura. Regulariza tu pago.',
+    );
+  }
+
+  throw new BadRequestException('Cuenta suspendida por falta de pago.');
+}
+
 function isValidEmail(value?: string) {
   if (!value) return true;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -51,88 +91,8 @@ export class SubscriptionsService {
   ) {}
 
   async createSubscription(input: {
-  accountId: string;
-  tenantName: string;
-  tenantRut?: string;
-  tenantEmail?: string;
-  tenantPhone?: string;
-  billingDay?: number;
-  startDate?: string; // ISO date string
-  hasInitialCharges?: boolean;
-  initialCharges?: { label: string; amount: number }[];
-  monthlyBillingStart?: string;
-}) {
-  const {
-    accountId,
-    tenantName,
-    tenantRut,
-    tenantEmail,
-    tenantPhone,
-    billingDay,
-    startDate,
-    hasInitialCharges,
-    initialCharges,
-    monthlyBillingStart,
-  } = input;
-
-  if (!accountId) throw new BadRequestException('accountId is required');
-  if (!tenantName) throw new BadRequestException('tenantName is required');
-
-  if (tenantEmail && !isValidEmail(tenantEmail)) {
-    throw new BadRequestException('Email inválido');
-  }
-
-  if (tenantPhone && !isValidChileanPhone(tenantPhone)) {
-    throw new BadRequestException('Teléfono inválido');
-  }
-
-  if (tenantRut && !isValidRut(tenantRut)) {
-    throw new BadRequestException('RUT inválido');
-  }
-
-  if (monthlyBillingStart && !/^\d{4}-\d{2}$/.test(monthlyBillingStart)) {
-    throw new BadRequestException('monthlyBillingStart must use YYYY-MM');
-  }
-
-  const normalizedInitialCharges = Array.isArray(initialCharges)
-    ? initialCharges
-        .filter((item) => item && item.label && item.amount != null)
-        .map((item) => ({
-          label: String(item.label).trim(),
-          amount: Math.trunc(Number(item.amount)),
-        }))
-        .filter((item) => item.label && !Number.isNaN(item.amount) && item.amount > 0)
-    : [];
-
-try {
-  return await this.prisma.subscription.create({
-    data: {
-      accountId,
-      tenantName,
-      tenantRut: tenantRut || null,
-      tenantEmail: tenantEmail || null,
-      tenantPhone: tenantPhone || null,
-      billingDay: billingDay ?? 5,
-      status: 'draft',
-      startDate: startDate ? new Date(startDate) : new Date(),
-      hasInitialCharges: Boolean(hasInitialCharges && normalizedInitialCharges.length > 0),
-      initialCharges: normalizedInitialCharges.length
-        ? (normalizedInitialCharges as any)
-        : undefined,
-      monthlyBillingStart: monthlyBillingStart || null,
-      firstInvoiceType: null,
-    },
-  });
-} catch (error) {
-  console.error('createSubscription error:', error);
-  throw error;
-}
-}
-
-async updateDraft(
-  id: string,
-  input: {
-    tenantName?: string;
+    accountId: string;
+    tenantName: string;
     tenantRut?: string;
     tenantEmail?: string;
     tenantPhone?: string;
@@ -141,90 +101,196 @@ async updateDraft(
     hasInitialCharges?: boolean;
     initialCharges?: { label: string; amount: number }[];
     monthlyBillingStart?: string;
-  },
-  accountId: string,
-) {
-  if (!id) throw new BadRequestException('id is required');
-  if (!accountId) throw new BadRequestException('accountId is required');
-
-  const existing = await this.prisma.subscription.findFirst({
-    where: {
-      id,
+  }) {
+    const {
       accountId,
-    },
-  });
+      tenantName,
+      tenantRut,
+      tenantEmail,
+      tenantPhone,
+      billingDay,
+      startDate,
+      hasInitialCharges,
+      initialCharges,
+      monthlyBillingStart,
+    } = input;
 
-  if (!existing) {
-    throw new BadRequestException('Subscription not found');
+    if (!accountId) throw new BadRequestException('accountId is required');
+    if (!tenantName) throw new BadRequestException('tenantName is required');
+
+    await assertAccountCanOperate(this.prisma, accountId);
+
+    if (tenantEmail && !isValidEmail(tenantEmail)) {
+      throw new BadRequestException('Email inválido');
+    }
+
+    if (tenantPhone && !isValidChileanPhone(tenantPhone)) {
+      throw new BadRequestException('Teléfono inválido');
+    }
+
+    if (tenantRut && !isValidRut(tenantRut)) {
+      throw new BadRequestException('RUT inválido');
+    }
+
+    if (monthlyBillingStart && !/^\d{4}-\d{2}$/.test(monthlyBillingStart)) {
+      throw new BadRequestException('monthlyBillingStart must use YYYY-MM');
+    }
+
+    const normalizedInitialCharges = Array.isArray(initialCharges)
+      ? initialCharges
+          .filter((item) => item && item.label && item.amount != null)
+          .map((item) => ({
+            label: String(item.label).trim(),
+            amount: Math.trunc(Number(item.amount)),
+          }))
+          .filter(
+            (item) => item.label && !Number.isNaN(item.amount) && item.amount > 0,
+          )
+      : [];
+
+    try {
+      return await this.prisma.subscription.create({
+        data: {
+          accountId,
+          tenantName,
+          tenantRut: tenantRut || null,
+          tenantEmail: tenantEmail || null,
+          tenantPhone: tenantPhone || null,
+          billingDay: billingDay ?? 5,
+          status: 'draft',
+          startDate: startDate ? new Date(startDate) : new Date(),
+          hasInitialCharges: Boolean(
+            hasInitialCharges && normalizedInitialCharges.length > 0,
+          ),
+          initialCharges: normalizedInitialCharges.length
+            ? (normalizedInitialCharges as any)
+            : undefined,
+          monthlyBillingStart: monthlyBillingStart || null,
+          firstInvoiceType: null,
+        },
+      });
+    } catch (error) {
+      console.error('createSubscription error:', error);
+      throw error;
+    }
   }
 
-  if (existing.status !== 'draft') {
-    throw new BadRequestException('Only draft subscriptions can be updated');
-  }
-
-  const {
-    tenantName,
-    tenantRut,
-    tenantEmail,
-    tenantPhone,
-    billingDay,
-    startDate,
-    hasInitialCharges,
-    initialCharges,
-    monthlyBillingStart,
-  } = input;
-
-  const normalizedInitialCharges = Array.isArray(initialCharges)
-    ? initialCharges
-        .filter((item) => item && item.label && item.amount != null)
-        .map((item) => ({
-          label: String(item.label).trim(),
-          amount: Math.trunc(Number(item.amount)),
-        }))
-        .filter((item) => item.label && !Number.isNaN(item.amount) && item.amount > 0)
-    : [];
-
-  const nextHasInitialCharges =
-    hasInitialCharges === undefined
-      ? existing.hasInitialCharges
-      : Boolean(hasInitialCharges && normalizedInitialCharges.length > 0);
-
-  return this.prisma.subscription.update({
-    where: { id },
-    data: {
-      tenantName: tenantName?.trim() || existing.tenantName,
-      tenantRut: tenantRut === undefined ? existing.tenantRut : tenantRut || null,
-      tenantEmail: tenantEmail === undefined ? existing.tenantEmail : tenantEmail || null,
-      tenantPhone: tenantPhone === undefined ? existing.tenantPhone : tenantPhone || null,
-      billingDay: billingDay ?? existing.billingDay,
-      startDate: startDate ? new Date(startDate) : existing.startDate,
-      hasInitialCharges: nextHasInitialCharges,
-      initialCharges:
-        nextHasInitialCharges && normalizedInitialCharges.length
-          ? (normalizedInitialCharges as any)
-          : undefined,
-      monthlyBillingStart:
-        monthlyBillingStart === undefined
-          ? existing.monthlyBillingStart
-          : monthlyBillingStart || null,
+  async updateDraft(
+    id: string,
+    input: {
+      tenantName?: string;
+      tenantRut?: string;
+      tenantEmail?: string;
+      tenantPhone?: string;
+      billingDay?: number;
+      startDate?: string;
+      hasInitialCharges?: boolean;
+      initialCharges?: { label: string; amount: number }[];
+      monthlyBillingStart?: string;
     },
-  });
-}
+    accountId: string,
+  ) {
+    if (!id) throw new BadRequestException('id is required');
+    if (!accountId) throw new BadRequestException('accountId is required');
+
+    await assertAccountCanOperate(this.prisma, accountId);
+
+    const existing = await this.prisma.subscription.findFirst({
+      where: {
+        id,
+        accountId,
+      },
+    });
+
+    if (!existing) {
+      throw new BadRequestException('Subscription not found');
+    }
+
+    if (existing.status !== 'draft') {
+      throw new BadRequestException('Only draft subscriptions can be updated');
+    }
+
+    const {
+      tenantName,
+      tenantRut,
+      tenantEmail,
+      tenantPhone,
+      billingDay,
+      startDate,
+      hasInitialCharges,
+      initialCharges,
+      monthlyBillingStart,
+    } = input;
+
+    const normalizedInitialCharges = Array.isArray(initialCharges)
+      ? initialCharges
+          .filter((item) => item && item.label && item.amount != null)
+          .map((item) => ({
+            label: String(item.label).trim(),
+            amount: Math.trunc(Number(item.amount)),
+          }))
+          .filter(
+            (item) => item.label && !Number.isNaN(item.amount) && item.amount > 0,
+          )
+      : [];
+
+    const nextHasInitialCharges =
+      hasInitialCharges === undefined
+        ? existing.hasInitialCharges
+        : Boolean(hasInitialCharges && normalizedInitialCharges.length > 0);
+
+    return this.prisma.subscription.update({
+      where: { id },
+      data: {
+        tenantName: tenantName?.trim() || existing.tenantName,
+        tenantRut:
+          tenantRut === undefined ? existing.tenantRut : tenantRut || null,
+        tenantEmail:
+          tenantEmail === undefined ? existing.tenantEmail : tenantEmail || null,
+        tenantPhone:
+          tenantPhone === undefined ? existing.tenantPhone : tenantPhone || null,
+        billingDay: billingDay ?? existing.billingDay,
+        startDate: startDate ? new Date(startDate) : existing.startDate,
+        hasInitialCharges: nextHasInitialCharges,
+        initialCharges:
+          nextHasInitialCharges && normalizedInitialCharges.length
+            ? (normalizedInitialCharges as any)
+            : undefined,
+        monthlyBillingStart:
+          monthlyBillingStart === undefined
+            ? existing.monthlyBillingStart
+            : monthlyBillingStart || null,
+      },
+    });
+  }
 
   async addItem(input: {
     subscriptionId: string;
-    type: string; // depto|estacionamiento|bodega|gasto_comun|otro
+    type: string;
     name: string;
     amount: number;
   }) {
     const { subscriptionId, type, name, amount } = input;
 
-    if (!subscriptionId) throw new BadRequestException('subscriptionId is required');
+    if (!subscriptionId) {
+      throw new BadRequestException('subscriptionId is required');
+    }
     if (!type) throw new BadRequestException('type is required');
     if (!name) throw new BadRequestException('name is required');
     if (amount == null || Number.isNaN(amount)) {
       throw new BadRequestException('amount is required');
     }
+
+    const sub = await this.prisma.subscription.findUnique({
+      where: { id: subscriptionId },
+      select: { accountId: true },
+    });
+
+    if (!sub) {
+      throw new BadRequestException('Subscription not found');
+    }
+
+    await assertAccountCanOperate(this.prisma, sub.accountId);
 
     const normalizedName = name.trim();
     const normalizedAmount = Math.trunc(amount);
@@ -265,83 +331,88 @@ async updateDraft(
   }
 
   async activate(subscriptionId: string) {
-  if (!subscriptionId) {
-    throw new BadRequestException('subscriptionId is required');
-  }
+    if (!subscriptionId) {
+      throw new BadRequestException('subscriptionId is required');
+    }
 
-  const sub = await this.prisma.subscription.findUnique({
-    where: { id: subscriptionId },
-    include: {
-      items: true,
-      tenant: true,
-    },
-  });
-
-  if (!sub) {
-    throw new BadRequestException('Subscription not found');
-  }
-
-  if (sub.status === 'active') {
-    return sub;
-  }
-
-  if (!sub.items.length) {
-    throw new BadRequestException('Cannot activate without items');
-  }
-
-  if (!sub.monthlyBillingStart) {
-    throw new BadRequestException('monthlyBillingStart is required');
-  }
-  const monthlyBillingStart = sub.monthlyBillingStart;
-
-  const initialCharges = Array.isArray(sub.initialCharges)
-    ? (sub.initialCharges as { label?: string; amount?: number }[])
-        .filter((item) => item && item.label && item.amount != null)
-        .map((item) => ({
-          label: String(item.label).trim(),
-          amount: Math.trunc(Number(item.amount)),
-        }))
-        .filter((item) => item.label && !Number.isNaN(item.amount) && item.amount > 0)
-    : [];
-
-  const hasInitialCharges = sub.hasInitialCharges && initialCharges.length > 0;
-
-  return this.prisma.$transaction(async (tx) => {
-    const updated = await tx.subscription.update({
+    const sub = await this.prisma.subscription.findUnique({
       where: { id: subscriptionId },
-      data: {
-        status: 'active',
-        firstInvoiceType: hasInitialCharges ? 'initial' : 'monthly',
+      include: {
+        items: true,
+        tenant: true,
       },
     });
 
-    await tx.tenant.upsert({
-      where: { subscriptionId: sub.id },
-      update: {
-        name: sub.tenantName,
-        rut: sub.tenantRut ?? null,
-        email: sub.tenantEmail ?? null,
-        phone: sub.tenantPhone ?? null,
-        accountId: sub.accountId,
-      },
-      create: {
-        subscriptionId: sub.id,
-        accountId: sub.accountId,
-        name: sub.tenantName,
-        rut: sub.tenantRut ?? null,
-        email: sub.tenantEmail ?? null,
-        phone: sub.tenantPhone ?? null,
-      },
-    });
+    if (!sub) {
+      throw new BadRequestException('Subscription not found');
+    }
 
-  if (hasInitialCharges) {
-    await this.invoicesService.createFromSubscription({
-      subscriptionId: sub.id,
-      period: monthlyBillingStart,
-      type: 'initial',
-      customItems: initialCharges,
-    });
-  }
+    await assertAccountCanOperate(this.prisma, sub.accountId);
+
+    if (sub.status === 'active') {
+      return sub;
+    }
+
+    if (!sub.items.length) {
+      throw new BadRequestException('Cannot activate without items');
+    }
+
+    if (!sub.monthlyBillingStart) {
+      throw new BadRequestException('monthlyBillingStart is required');
+    }
+
+    const monthlyBillingStart = sub.monthlyBillingStart;
+
+    const initialCharges = Array.isArray(sub.initialCharges)
+      ? (sub.initialCharges as { label?: string; amount?: number }[])
+          .filter((item) => item && item.label && item.amount != null)
+          .map((item) => ({
+            label: String(item.label).trim(),
+            amount: Math.trunc(Number(item.amount)),
+          }))
+          .filter(
+            (item) => item.label && !Number.isNaN(item.amount) && item.amount > 0,
+          )
+      : [];
+
+    const hasInitialCharges = sub.hasInitialCharges && initialCharges.length > 0;
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.subscription.update({
+        where: { id: subscriptionId },
+        data: {
+          status: 'active',
+          firstInvoiceType: hasInitialCharges ? 'initial' : 'monthly',
+        },
+      });
+
+      await tx.tenant.upsert({
+        where: { subscriptionId: sub.id },
+        update: {
+          name: sub.tenantName,
+          rut: sub.tenantRut ?? null,
+          email: sub.tenantEmail ?? null,
+          phone: sub.tenantPhone ?? null,
+          accountId: sub.accountId,
+        },
+        create: {
+          subscriptionId: sub.id,
+          accountId: sub.accountId,
+          name: sub.tenantName,
+          rut: sub.tenantRut ?? null,
+          email: sub.tenantEmail ?? null,
+          phone: sub.tenantPhone ?? null,
+        },
+      });
+
+      if (hasInitialCharges) {
+        await this.invoicesService.createFromSubscription({
+          subscriptionId: sub.id,
+          period: monthlyBillingStart,
+          type: 'initial',
+          customItems: initialCharges,
+        });
+      }
 
       return updated;
     });
@@ -354,6 +425,8 @@ async updateDraft(
   ) {
     if (!id) throw new BadRequestException('id is required');
     if (!accountId) throw new BadRequestException('accountId is required');
+
+    await assertAccountCanOperate(this.prisma, accountId);
 
     const item = await this.prisma.subscriptionItem.findFirst({
       where: {
@@ -383,6 +456,8 @@ async updateDraft(
   async deleteItem(id: string, accountId: string) {
     if (!id) throw new BadRequestException('id is required');
     if (!accountId) throw new BadRequestException('accountId is required');
+
+    await assertAccountCanOperate(this.prisma, accountId);
 
     const item = await this.prisma.subscriptionItem.findFirst({
       where: {

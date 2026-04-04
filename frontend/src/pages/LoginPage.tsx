@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { api } from "@/lib/axios";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { firebaseAuth } from "@/lib/firebase";
 
 export function LoginPage() {
   const { login, user, initializing } = useAuth();
@@ -12,6 +14,9 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (initializing) return;
@@ -50,14 +55,30 @@ export function LoginPage() {
         navigate("/", { replace: true });
       }
     } catch (err: any) {
-      const msg =
-        err?.code === "auth/invalid-credential"
-          ? "Credenciales incorrectas"
-          : "Credenciales incorrectas";
-
-      setError(msg);
+      setError("Credenciales incorrectas");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!email) {
+      setResetMessage("Ingresa tu correo primero");
+      return;
+    }
+
+    setResetLoading(true);
+    setResetMessage(null);
+
+    try {
+      await sendPasswordResetEmail(firebaseAuth, email.trim());
+      setResetMessage(
+        "Te enviamos un correo para restablecer tu contraseña"
+      );
+    } catch (err) {
+      setResetMessage("No se pudo enviar el correo");
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -84,12 +105,7 @@ export function LoginPage() {
         }}
       >
         <h1 className="h1">Iniciar sesión</h1>
-        <p
-          className="sub"
-          style={{
-            marginBottom: "24px",
-          }}
-        >
+        <p className="sub" style={{ marginBottom: "24px" }}>
           Accede a tu cuenta
         </p>
 
@@ -102,17 +118,7 @@ export function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               type="email"
               autoComplete="email"
-              autoFocus
               required
-              style={{
-                width: "100%",
-                padding: "12px 14px",
-                border: "1px solid #e5e7eb",
-                borderRadius: "8px",
-                background: "#ffffff",
-                fontSize: "14px",
-                outline: "none",
-              }}
             />
           </label>
 
@@ -126,24 +132,11 @@ export function LoginPage() {
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 required
-                style={{
-                  width: "100%",
-                  padding: "12px 14px",
-                  paddingRight: "56px",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: "8px",
-                  background: "#ffffff",
-                  fontSize: "14px",
-                  outline: "none",
-                }}
               />
 
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                aria-label={
-                  showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
-                }
                 style={{
                   position: "absolute",
                   right: "12px",
@@ -152,8 +145,6 @@ export function LoginPage() {
                   background: "transparent",
                   border: "none",
                   cursor: "pointer",
-                  padding: 0,
-                  fontSize: "14px",
                   color: "#666",
                 }}
               >
@@ -162,28 +153,55 @@ export function LoginPage() {
             </div>
           </label>
 
+          {/* 🔥 RESET PASSWORD */}
+          <div
+            style={{
+              textAlign: "right",
+              marginTop: "-8px",
+              marginBottom: "12px",
+            }}
+          >
+            <button
+              type="button"
+              onClick={handleResetPassword}
+              disabled={resetLoading}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#7c3aed",
+                cursor: "pointer",
+                fontSize: "13px",
+              }}
+            >
+              {resetLoading
+                ? "Enviando..."
+                : "¿Olvidaste tu contraseña?"}
+            </button>
+          </div>
+
+          {resetMessage && (
+            <div
+              style={{
+                marginBottom: "12px",
+                fontSize: "13px",
+                color: "#374151",
+              }}
+            >
+              {resetMessage}
+            </div>
+          )}
+
           <button
-            className="button"
             disabled={submitting}
             type="submit"
-            onMouseEnter={(e) => {
-              if (!submitting) e.currentTarget.style.background = "#6d28d9";
-            }}
-            onMouseLeave={(e) => {
-              if (!submitting) e.currentTarget.style.background = "#7c3aed";
-            }}
             style={{
               width: "100%",
-              padding: "12px 16px",
+              padding: "12px",
+              background: submitting ? "#a78bfa" : "#7c3aed",
+              color: "#fff",
               borderRadius: "8px",
               border: "none",
-              background: submitting ? "#a78bfa" : "#7c3aed",
-              color: "#ffffff",
-              fontSize: "14px",
-              fontWeight: 600,
-              cursor: submitting ? "not-allowed" : "pointer",
-              opacity: submitting ? 0.9 : 1,
-              transition: "all 0.2s ease",
+              cursor: "pointer",
             }}
           >
             {submitting ? "Ingresando..." : "Ingresar"}
@@ -191,16 +209,10 @@ export function LoginPage() {
 
           {error && (
             <div
-              className="errorBox"
               style={{
-                width: "100%",
-                padding: "10px 12px",
-                borderRadius: "8px",
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
+                marginTop: "12px",
                 color: "#b91c1c",
                 fontSize: "14px",
-                lineHeight: 1.4,
               }}
             >
               {error}

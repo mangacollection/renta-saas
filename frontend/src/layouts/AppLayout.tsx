@@ -394,18 +394,22 @@ export default function AppLayout() {
     setShowQuickActions(false);
   }, [location.pathname]);
 
-  useEffect(() => {
-    async function checkNotifications() {
-      try {
-        const data = await getAutomationRecommendations();
-        setHasNotifications(data.length > 0);
-      } catch (err) {
-        console.error("Error loading notifications", err);
-      }
+ useEffect(() => {
+  async function checkNotifications() {
+    try {
+      // 🚫 TEMP: desactivado para admin MVP
+      const data = await getAutomationRecommendations();
+      setHasNotifications(data.length > 0);
+    } catch (err) {
+      console.error("Error loading notifications", err);
     }
+  }
 
+  // 🚫 TEMP: evitar ejecución para estabilizar admin
+  if (!location.pathname.startsWith("/admin")) {
     checkNotifications();
-  }, [location.pathname]);
+  }
+}, [location.pathname]);
 
   async function handleLogout() {
     setShowQuickActions(false);

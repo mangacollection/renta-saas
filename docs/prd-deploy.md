@@ -1,118 +1,215 @@
-PRD Deploy — RentaControl
+🚀 PRD Release Playbook — RentaControl (v2.0 REAL)
 
-Doc version: v1.2
-Última actualización: 2026-03-21
-Estado: operativo productivo con CI/CD activo
+Estado: probado en producción
+Última actualización: 2026-04-03
+Owner: Agente Liberador PRD
 
-Objetivo
+🎯 OBJETIVO
 
-Documentar el proceso de despliegue y validación de producción.
+Asegurar que cada release:
 
-1. Backend PRD
-Plataforma
-Cloud Run
-Requisitos previos
-build backend sin errores
-variables PRD configuradas
-migraciones Prisma disponibles
-imagen Docker publicada en Artifact Registry
-secrets configurados en GitHub Actions
-Service Account GCP activa
-Variables backend mínimas
-DATABASE_URL
-FIREBASE_PROJECT_ID
-FIREBASE_CLIENT_EMAIL
-FIREBASE_PRIVATE_KEY
-Variables tenant Gmail
-TENANT_GMAIL_CLIENT_ID
-TENANT_GMAIL_CLIENT_SECRET
-TENANT_GMAIL_REFRESH_TOKEN
-TENANT_GMAIL_TARGET_ALIAS
-Validaciones backend
-GET /tenant-payments
-POST /tenant-payments/from-bank-email
-POST /integrations/gmail/webhook
-2. Frontend PRD
-Plataforma
-Cloudflare Pages
-Variables frontend
-VITE_API_BASE_URL
-VITE_FIREBASE_API_KEY
-VITE_FIREBASE_PROJECT_ID
-VITE_FIREBASE_AUTH_DOMAIN
-Validaciones frontend
-login
-vista de pagos
-invoices visibles
-llamadas correctas a api.rentacontrol.cl
-3. Base de datos
-PRD
-Cloud SQL PostgreSQL
-Tablas clave
-Tenant
-TenantPayment
-PaymentSender
-GmailWebhookJob
-GmailProcessedMessage
-GmailCursor
-Invoice
-Subscription
-4. Flujo objetivo PRD
+se despliegue correctamente
+no rompa PRD
+tenga DB consistente
+mantenga jobs funcionando
+sea validado con evidencia real
+🧭 PRINCIPIO CLAVE
 
-transferencia bancaria
-↓
-correo banco
-↓
-alias tenant
-↓
-gmail webhook
-↓
-worker procesa
-↓
-TenantPayment creado
-↓
-invoice conciliada
-↓
-UI refleja pago
+👉 Deploy ≠ Release
 
-5. Riesgos actuales conocidos
-Worker usa cron en Cloud Run (no garantizado)
-Evaluar migración a Cloud Scheduler
-accountId temporalmente hardcodeado en worker
-Dependencia de Gmail API latencia
-6. Cambios recientes PRD
-CI/CD Backend
+Un release está listo solo cuando:
 
-Problema:
+código desplegado ✅
+DB sincronizada ✅
+jobs activos ✅
+UI funcionando ✅
+flujo real validado ✅
+🔁 TIPOS DE RELEASE
+Tipo A — Solo Frontend
+UI
+layout
+cambios visuales
+Tipo B — Backend sin Prisma
+endpoints
+lógica
+Tipo C — Backend + Prisma
+cambios en schema
+nuevas tablas/campos
+Tipo D — Backend + Jobs (CRÍTICO)
+scheduler
+automation
+Gmail worker
 
-despliegue manual
-riesgo de errores
+👉 El último release fue Tipo D
 
-Solución:
+🧱 FASE 1 — PREPARACIÓN
+1.1 Validar estado del repo
+git status
+git branch
+git log --oneline -3
+Reglas
+❌ NO cambios sin commit
+❌ NO archivos basura
+❌ NO branch incorrecta
+1.2 Limpiar staging
 
-GitHub Actions implementado
-deploy automático en push a main
-Corrección Prisma
+Nunca subir:
 
-Problema:
+.sfdx/
+archivos locales
+basura de IDE
+git restore --staged .sfdx/
+1.3 Build local obligatorio
+Backend
+cd backend
+pnpm build
+Frontend
+cd ../frontend
+pnpm build
 
-prisma migrate deploy se ejecutaba en Docker build
-fallas en CI/CD
+👉 Ambos deben pasar sin errores
 
-Solución:
+🧱 FASE 2 — COMMIT Y PUSH
+2.1 Commit limpio
+git add .
+git commit -m "feat: <descripción clara>"
+2.2 Push
+git push origin <feature-branch>
+🧱 FASE 3 — PULL REQUEST
+3.1 Crear PR → main
+Validar:
+archivos correctos
+migraciones incluidas si aplica
+nada extraño en diff
+3.2 Validación rápida
 
-eliminado de Dockerfile
-eliminado de runtime (main.ts)
-migraciones pasan a ejecución externa
-GmailCursor Fix
+Checklist:
 
-Problema:
+backend ✔
+frontend ✔
+prisma ✔ (si aplica)
+jobs ✔ (si aplica)
+3.3 Merge
 
-expiration no existía en PRD
-Prisma schema ≠ DB real
+👉 Esto dispara deploy automático
 
-Solución:
+🧱 FASE 4 — DEPLOY BACKEND
+Pipeline real
 
-Se ejecutó ALTER TABLE manual en PRD
-se eliminó migración runtime en main.ts
-ALTER TABLE "GmailCursor" ADD COLUMN "expiration" TEXT;
+GitHub Actions:
+
+build Docker
+push Artifact Registry
+deploy Cloud Run
+Validar en GitHub Actions
+
+Estados:
+
+Workflow corriendo
+Workflow exitoso
+❌ Workflow falló
+🧱 FASE 5 — VALIDACIÓN CLOUD RUN
+Logs
+
+Buscar:
+
+Nest started ✅
+Ready TRUE ✅
+GmailWorker initialized ✅
+
+No debe haber:
+
+Prisma error
+missing env
+crash
+🧱 FASE 6 — MIGRACIÓN DB (CRÍTICO)
+🚨 Regla
+
+SI hay cambio Prisma → SIEMPRE ejecutar esto
+
+6.1 Levantar proxy
+cloud-sql-proxy rentacontrol-prod:southamerica-west1:rentacontrol-db
+6.2 Ejecutar migración
+DATABASE_URL='postgresql://app_user:***@127.0.0.1:5432/rentacontrol' pnpm exec prisma migrate deploy
+Errores comunes
+❌ zsh error !
+
+👉 usar comillas simples '
+
+❌ P1001
+
+👉 proxy no corriendo
+
+❌ socket error
+
+👉 usar 127.0.0.1, NO /cloudsql
+
+🧱 FASE 7 — VALIDACIÓN DB
+SELECT * FROM "AutomationRun" LIMIT 5;
+
+Resultado esperado:
+
+tabla existe ✅
+🧱 FASE 8 — VALIDACIÓN JOBS
+Gmail Worker
+corre cada 30s
+logs activos
+Automation Job
+corre 9 AM
+inserta en AutomationRun
+🧱 FASE 9 — SMOKE TEST FUNCIONAL
+UI
+login ✔
+invoices ✔
+navegación ✔
+Validar
+sin errores visibles
+datos coherentes
+🧱 FASE 10 — CIERRE DEL RELEASE
+Reportar
+A. Qué se pasó
+backend
+frontend
+DB
+B. Qué se validó
+logs
+DB
+UI
+C. Riesgos
+warnings
+deuda técnica
+⚠️ RIESGOS REALES IDENTIFICADOS
+1. Prisma fuera del pipeline
+
+👉 siempre migrar manualmente
+
+2. Gmail Worker depende de env
+TARGET_ALIAS
+DEFAULT_ACCOUNT_ID
+3. Drift DB posible
+
+👉 cambios manuales previos
+
+4. OpenSSL warning
+
+👉 no bloqueante pero revisar
+
+5. Jobs son críticos
+
+👉 si mueren, producto deja de funcionar
+
+✅ DEFINITION OF DONE
+
+Un release está listo cuando:
+
+deploy exitoso ✔
+DB sincronizada ✔
+jobs funcionando ✔
+UI funcional ✔
+flujo real probado ✔
+🧠 MEJORA FUTURA (IMPORTANTE)
+Automatizar:
+prisma migrate deploy en CI/CD
+health check de jobs
+alerta si GmailWorker muere
+dashboard de AutomationRun
