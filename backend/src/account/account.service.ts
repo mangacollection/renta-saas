@@ -9,7 +9,6 @@ export class AccountService {
   async getPlan(accountId: string) {
     if (!accountId) throw new BadRequestException('accountId is required');
 
-    // 1) Cargar account
     const account = await this.prisma.account.findUnique({
       where: { id: accountId },
       select: {
@@ -17,12 +16,12 @@ export class AccountService {
         planPrice: true,
         billingStatus: true,
         trialEndsAt: true,
+        nextPaymentDueAt: true,
       },
     });
 
     if (!account) throw new BadRequestException('account not found');
 
-    // 2) Si trial venció, pasar a past_due (sin cron)
     if (
       account.billingStatus === 'trial' &&
       account.trialEndsAt &&
@@ -33,11 +32,9 @@ export class AccountService {
         data: { billingStatus: 'past_due' },
       });
 
-      // reflejar cambio en respuesta
       account.billingStatus = 'past_due';
     }
 
-    // 3) daysRemaining dinámico
     const daysRemaining =
       account.trialEndsAt && account.billingStatus === 'trial'
         ? Math.max(
@@ -54,7 +51,45 @@ export class AccountService {
       planPrice: account.planPrice,
       billingStatus: account.billingStatus,
       trialEndsAt: account.trialEndsAt,
+      nextPaymentDueAt: account.nextPaymentDueAt,
       daysRemaining,
     };
+  }
+
+  async getProfile(email: string) {
+    if (!email) throw new BadRequestException('email is required');
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        email: true,
+        role: true,
+        phone: true,
+      },
+    });
+
+    if (!user) throw new BadRequestException('user not found');
+
+    return user;
+  }
+
+  async updateProfile(email: string, phone?: string) {
+    if (!email) throw new BadRequestException('email is required');
+
+    const normalizedPhone = phone?.trim() ? phone.trim() : null;
+
+    const user = await this.prisma.user.update({
+      where: { email },
+      data: {
+        phone: normalizedPhone,
+      },
+      select: {
+        email: true,
+        role: true,
+        phone: true,
+      },
+    });
+
+    return user;
   }
 }
