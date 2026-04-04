@@ -5,5 +5,12 @@ export type AccountPlan = {
   planPrice: number;
   billingStatus: BillingStatus;
   trialEndsAt: string | null;
+  nextPaymentDueAt: string | null;
   daysRemaining: number;
+};
+
+export type AccountProfile = {
+  email: string;
+  role: string;
+  phone: string | null;
 };
