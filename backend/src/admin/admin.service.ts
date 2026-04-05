@@ -15,7 +15,13 @@ export class AdminService {
     };
 
     if (billingStatus === 'active') {
-      data.billingStartedAt = new Date();
+      const now = new Date();
+
+      const nextPaymentDueAt = new Date(now);
+      nextPaymentDueAt.setMonth(nextPaymentDueAt.getMonth() + 1);
+
+      data.billingStartedAt = now;
+      data.nextPaymentDueAt = nextPaymentDueAt;
     }
 
     return this.prisma.account.update({
@@ -25,6 +31,175 @@ export class AdminService {
       data,
     });
   }
+
+  async getAccountBillingConfig(id: string) {
+    if (!id) {
+      throw new BadRequestException('account id is required');
+    }
+
+    const account = await this.prisma.account.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        billingPhone: true,
+        billingBankName: true,
+        billingAccountType: true,
+        billingAccountNumber: true,
+        billingAccountHolder: true,
+        billingAccountRut: true,
+        billingTransferEmail: true,
+      },
+    });
+
+    if (!account) {
+      throw new BadRequestException('account not found');
+    }
+
+    return account;
+  }
+
+  async updateAccountBillingConfig(
+    id: string,
+    input: {
+      billingPhone?: string;
+      billingBankName?: string;
+      billingAccountType?: string;
+      billingAccountNumber?: string;
+      billingAccountHolder?: string;
+      billingAccountRut?: string;
+      billingTransferEmail?: string;
+    },
+  ) {
+    if (!id) {
+      throw new BadRequestException('account id is required');
+    }
+
+    const account = await this.prisma.account.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!account) {
+      throw new BadRequestException('account not found');
+    }
+
+    const normalizeNullable = (value?: string) => {
+      if (value === undefined) return undefined;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    };
+
+    const normalizePhone = (value?: string) => {
+      if (value === undefined) return undefined;
+      const digits = value.replace(/\D/g, '');
+      return digits.length > 0 ? digits : null;
+    };
+
+    const billingTransferEmail = normalizeNullable(input.billingTransferEmail);
+    if (
+      billingTransferEmail &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billingTransferEmail)
+    ) {
+      throw new BadRequestException('billingTransferEmail is invalid');
+    }
+
+    return this.prisma.account.update({
+      where: { id },
+      data: {
+        billingPhone: normalizePhone(input.billingPhone),
+        billingBankName: normalizeNullable(input.billingBankName),
+        billingAccountType: normalizeNullable(input.billingAccountType),
+        billingAccountNumber: normalizeNullable(input.billingAccountNumber),
+        billingAccountHolder: normalizeNullable(input.billingAccountHolder),
+        billingAccountRut: normalizeNullable(input.billingAccountRut),
+        billingTransferEmail,
+      },
+      select: {
+        id: true,
+        name: true,
+        billingPhone: true,
+        billingBankName: true,
+        billingAccountType: true,
+        billingAccountNumber: true,
+        billingAccountHolder: true,
+        billingAccountRut: true,
+        billingTransferEmail: true,
+      },
+    });
+  }
+
+async getPlatformBillingConfig() {
+  let config = await this.prisma.platformBillingConfig.findFirst();
+
+  if (!config) {
+    config = await this.prisma.platformBillingConfig.create({
+      data: {},
+    });
+  }
+
+  return config;
+}
+
+async updatePlatformBillingConfig(input: {
+  billingPhone?: string;
+  billingBankName?: string;
+  billingAccountType?: string;
+  billingAccountNumber?: string;
+  billingAccountHolder?: string;
+  billingAccountRut?: string;
+  billingTransferEmail?: string;
+}) {
+  let config = await this.prisma.platformBillingConfig.findFirst();
+
+  if (!config) {
+    config = await this.prisma.platformBillingConfig.create({
+      data: {},
+    });
+  }
+
+  const normalizeNullable = (value?: string) => {
+    if (value === undefined) return undefined;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  };
+
+  const normalizePhone = (value?: string) => {
+    if (value === undefined) return undefined;
+    const digits = value.replace(/\D/g, '');
+    return digits.length > 0 ? digits : null;
+  };
+
+  const billingTransferEmail = normalizeNullable(input.billingTransferEmail);
+  if (
+    billingTransferEmail &&
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billingTransferEmail)
+  ) {
+    throw new BadRequestException('billingTransferEmail is invalid');
+  }
+
+  return this.prisma.platformBillingConfig.upsert({
+    where: { id: config.id },
+   update: {
+  billingPhone: normalizePhone(input.billingPhone),
+  billingBankName: normalizeNullable(input.billingBankName),
+  billingAccountType: normalizeNullable(input.billingAccountType),
+  billingAccountNumber: normalizeNullable(input.billingAccountNumber),
+  billingAccountHolder: normalizeNullable(input.billingAccountHolder),
+  billingAccountRut: normalizeNullable(input.billingAccountRut),
+  billingTransferEmail,
+},
+create: {
+  billingPhone: normalizePhone(input.billingPhone),
+  billingBankName: normalizeNullable(input.billingBankName),
+  billingAccountType: normalizeNullable(input.billingAccountType),
+  billingAccountNumber: normalizeNullable(input.billingAccountNumber),
+  billingAccountHolder: normalizeNullable(input.billingAccountHolder),
+  billingAccountRut: normalizeNullable(input.billingAccountRut),
+  billingTransferEmail,
+},
+  });
+}
 
   async createAccountManual(input: {
     email: string;
@@ -178,7 +353,6 @@ export class AdminService {
 
     const fullText = `${from}\n${subject ?? ''}\n${body ?? ''}`;
 
-    // 1) Extraer email
     let extractedEmail: string | null = null;
 
     const emailAfterLabel = fullText.match(/correo[:\s]+([^\s]+)/i);
@@ -195,12 +369,10 @@ export class AdminService {
       }
     }
 
-    // 2) Extraer RUT chileno (por ahora informativo)
     const rutMatch = fullText.match(/\b\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]\b/);
     const extractedRut = rutMatch?.[0]?.trim() ?? null;
     void extractedRut;
 
-    // 3) Extraer monto
     const amountMatches = fullText.match(/(?:CLP|\$)\s*([\d\.,]+)/gi);
 
     if (!amountMatches || amountMatches.length === 0) {
@@ -217,7 +389,6 @@ export class AdminService {
       throw new BadRequestException('invalid amount');
     }
 
-    // 4) Match SaaS actual por email
     if (!extractedEmail) {
       throw new BadRequestException(
         'email not found in email body for SaaS matching',
@@ -245,7 +416,6 @@ export class AdminService {
     const referenceKey = `${from} | ${subject}`;
     const windowStart = new Date(Date.now() - 10 * 60 * 1000);
 
-    // 5) Dedupe
     const existing = await this.prisma.accountPayment.findFirst({
       where: {
         accountId,
@@ -263,7 +433,6 @@ export class AdminService {
       return existing;
     }
 
-    // 6) Crear AccountPayment recibido
     const payment = await this.prisma.accountPayment.create({
       data: {
         accountId,
@@ -275,7 +444,6 @@ export class AdminService {
       },
     });
 
-    // 7) Si coincide con el plan SaaS → autoaprobar
     if (user.account.planPrice === amount) {
       const now = new Date();
       const nextPaymentDueAt = new Date(now);
@@ -307,7 +475,6 @@ export class AdminService {
       });
     }
 
-    // 8) Si no coincide monto exacto, queda para revisión manual
     return payment;
   }
 
