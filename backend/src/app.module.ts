@@ -14,8 +14,12 @@ import { PayoutsModule } from './payouts/payouts.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { GmailModule } from './integrations/gmail/gmail.module';
-import { AiModule } from './ai/ai.module'; // 👈 NUEVO
+import { AiModule } from './ai/ai.module';
 import { CollectionEventsModule } from './collection-events/collection-events.module';
+
+// ✅ NUEVO
+import { EmailService } from './email/email.service';
+import { AccountReminderJob } from './automation/account-reminder.job';
 
 @Module({
   imports: [
@@ -30,10 +34,17 @@ import { CollectionEventsModule } from './collection-events/collection-events.mo
     PayoutsModule,
     AuthModule,
     GmailModule,
-    AiModule, // 👈 NUEVO
+    AiModule,
     CollectionEventsModule,
   ],
   controllers: [AppController],
-  providers: [AppService, TenantGuard],
+  providers: [
+    AppService,
+    TenantGuard,
+
+    // ✅ NUEVO
+    EmailService,
+    AccountReminderJob,
+  ],
 })
 export class AppModule {}

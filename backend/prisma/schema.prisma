@@ -73,6 +73,15 @@ model Account {
   lastReminderSentAt DateTime?
   lastReminderType   String?
 
+    // 🔥 Billing config (cobranza)
+  billingPhone           String?
+  billingBankName        String?
+  billingAccountType     String?
+  billingAccountNumber   String?
+  billingAccountHolder   String?
+  billingAccountRut      String?
+  billingTransferEmail   String?
+
   accountPayments AccountPayment[]
   paymentSenders  PaymentSender[]
   subscriptions   Subscription[]
@@ -342,4 +351,16 @@ model AutomationRun {
   executedAt      DateTime @default(now())
   totalInvoices   Int
   recommendations Int
+}
+model PlatformBillingConfig {
+  id                   String   @id @default(cuid())
+  billingPhone         String?
+  billingBankName      String?
+  billingAccountType   String?
+  billingAccountNumber String?
+  billingAccountHolder String?
+  billingAccountRut    String?
+  billingTransferEmail String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }

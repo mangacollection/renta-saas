@@ -35,6 +35,27 @@ export class AdminController {
     return this.accountReminderJob.run();
   }
 
+  @Get('platform-billing-config')
+  getPlatformBillingConfig() {
+    return this.adminService.getPlatformBillingConfig();
+  }
+
+  @Patch('platform-billing-config')
+  updatePlatformBillingConfig(
+    @Body()
+    body: {
+      billingPhone?: string;
+      billingBankName?: string;
+      billingAccountType?: string;
+      billingAccountNumber?: string;
+      billingAccountHolder?: string;
+      billingAccountRut?: string;
+      billingTransferEmail?: string;
+    },
+  ) {
+    return this.adminService.updatePlatformBillingConfig(body);
+  }
+
   @Patch('accounts/:id/billing')
   updateBillingStatus(
     @Param('id') id: string,
@@ -46,6 +67,28 @@ export class AdminController {
       body.billingStatus,
       req.user,
     );
+  }
+
+  @Get('accounts/:id/billing-config')
+  getBillingConfig(@Param('id') id: string) {
+    return this.adminService.getAccountBillingConfig(id);
+  }
+
+  @Patch('accounts/:id/billing-config')
+  updateBillingConfig(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      billingPhone?: string;
+      billingBankName?: string;
+      billingAccountType?: string;
+      billingAccountNumber?: string;
+      billingAccountHolder?: string;
+      billingAccountRut?: string;
+      billingTransferEmail?: string;
+    },
+  ) {
+    return this.adminService.updateAccountBillingConfig(id, body);
   }
 
   @Post('accounts')

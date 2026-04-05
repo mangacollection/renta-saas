@@ -15,6 +15,19 @@ type AccountOverview = {
   totalPaid: number;
 };
 
+type PlatformBillingConfig = {
+  id: string;
+  billingPhone: string | null;
+  billingBankName: string | null;
+  billingAccountType: string | null;
+  billingAccountNumber: string | null;
+  billingAccountHolder: string | null;
+  billingAccountRut: string | null;
+  billingTransferEmail: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 const th: React.CSSProperties = {
   padding: "14px 12px",
   borderBottom: "1px solid #e5e7eb",
@@ -38,6 +51,7 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid #d7dbe6",
   outline: "none",
   fontSize: 14,
+  boxSizing: "border-box",
 };
 
 const modalButtonStyle: React.CSSProperties = {
@@ -68,16 +82,97 @@ export default function AdminAccountsPage() {
 
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  const [billingPhone, setBillingPhone] = useState("");
+  const [billingBankName, setBillingBankName] = useState("");
+  const [billingAccountType, setBillingAccountType] = useState("");
+  const [billingAccountNumber, setBillingAccountNumber] = useState("");
+  const [billingAccountHolder, setBillingAccountHolder] = useState("");
+  const [billingAccountRut, setBillingAccountRut] = useState("");
+  const [billingTransferEmail, setBillingTransferEmail] = useState("");
+  const [billingConfigId, setBillingConfigId] = useState<string | null>(null);
+  const [loadingBillingConfig, setLoadingBillingConfig] = useState(true);
+  const [savingBillingConfig, setSavingBillingConfig] = useState(false);
+  const [billingConfigMsg, setBillingConfigMsg] = useState<string | null>(null);
+
   async function loadAccounts() {
     try {
       setLoading(true);
       setError(null);
       const res = await api.get<AccountOverview[]>("/admin/accounts/overview");
       setAccounts(res.data);
-    } catch (err: any) {
+    } catch {
       setError("Error cargando cuentas");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadPlatformBillingConfig() {
+    try {
+      setLoadingBillingConfig(true);
+      setBillingConfigMsg(null);
+
+      const res = await api.get<PlatformBillingConfig>(
+        "/admin/platform-billing-config"
+      );
+
+      setBillingConfigId(res.data.id);
+      setBillingPhone(res.data.billingPhone ?? "");
+      setBillingBankName(res.data.billingBankName ?? "");
+      setBillingAccountType(res.data.billingAccountType ?? "");
+      setBillingAccountNumber(res.data.billingAccountNumber ?? "");
+      setBillingAccountHolder(res.data.billingAccountHolder ?? "");
+      setBillingAccountRut(res.data.billingAccountRut ?? "");
+      setBillingTransferEmail(res.data.billingTransferEmail ?? "");
+    } catch (err: any) {
+      setBillingConfigMsg("Error cargando configuración SaaS ❌");
+    } finally {
+      setLoadingBillingConfig(false);
+    }
+  }
+
+  async function savePlatformBillingConfig() {
+    try {
+      setSavingBillingConfig(true);
+      setBillingConfigMsg(null);
+
+      const payload = {
+        billingPhone: billingPhone.trim() || undefined,
+        billingBankName: billingBankName.trim() || undefined,
+        billingAccountType: billingAccountType.trim() || undefined,
+        billingAccountNumber: billingAccountNumber.trim() || undefined,
+        billingAccountHolder: billingAccountHolder.trim() || undefined,
+        billingAccountRut: billingAccountRut.trim() || undefined,
+        billingTransferEmail: billingTransferEmail.trim() || undefined,
+      };
+
+      const res = await api.patch<PlatformBillingConfig>(
+        "/admin/platform-billing-config",
+        payload
+      );
+
+      setBillingConfigId(res.data.id);
+      setBillingPhone(res.data.billingPhone ?? "");
+      setBillingBankName(res.data.billingBankName ?? "");
+      setBillingAccountType(res.data.billingAccountType ?? "");
+      setBillingAccountNumber(res.data.billingAccountNumber ?? "");
+      setBillingAccountHolder(res.data.billingAccountHolder ?? "");
+      setBillingAccountRut(res.data.billingAccountRut ?? "");
+      setBillingTransferEmail(res.data.billingTransferEmail ?? "");
+      setBillingConfigMsg("Configuración SaaS guardada correctamente ✅");
+    } catch (err: any) {
+      const backendMsg =
+        typeof err?.response?.data?.message === "string"
+          ? err.response.data.message
+          : null;
+
+      setBillingConfigMsg(
+        backendMsg
+          ? `${backendMsg} ❌`
+          : "Error guardando configuración SaaS ❌"
+      );
+    } finally {
+      setSavingBillingConfig(false);
     }
   }
 
@@ -189,6 +284,7 @@ export default function AdminAccountsPage() {
 
   useEffect(() => {
     loadAccounts();
+    loadPlatformBillingConfig();
   }, []);
 
   if (loading) {
@@ -290,6 +386,191 @@ export default function AdminAccountsPage() {
           Cerrar sesion
         </button>
       </header>
+
+      <div
+        style={{
+          borderRadius: 18,
+          background: "#ffffff",
+          border: "1px solid #e6e8ef",
+          boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+          padding: 18,
+          marginBottom: 16,
+        }}
+      >
+        <div
+          style={{
+            fontWeight: 800,
+            color: "#0f172a",
+            marginBottom: 6,
+          }}
+        >
+          Configuracion de cobro SaaS
+        </div>
+
+        <div
+          style={{
+            fontSize: 13,
+            color: "#64748b",
+            marginBottom: 14,
+          }}
+        >
+          Estos datos se usan en los emails de cobranza de RentaControl hacia
+          los owners.
+          <div style={{ marginTop: 8, fontSize: 13, color: "#64748b" }}>
+          Vista previa: estos datos se mostrarán en el botón de pago, WhatsApp y datos de transferencia del email.
+        </div>
+          {billingConfigId ? (
+            <>
+              {" "}
+              Config ID: <b>{billingConfigId}</b>
+            </>
+          ) : null}
+        </div>
+
+        {loadingBillingConfig ? (
+          <div style={{ fontSize: 14, color: "#64748b" }}>
+            Cargando configuración SaaS...
+          </div>
+        ) : (
+          <>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gap: 12,
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                  WhatsApp cobranza
+                </div>
+                <input
+                  value={billingPhone}
+                  onChange={(e) =>
+                    setBillingPhone(e.target.value.replace(/[^\d]/g, ""))
+                  }
+                  style={inputStyle}
+                  placeholder="56912345678"
+                />
+              </div>
+
+              <div>
+                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                  Banco
+                </div>
+                <input
+                  value={billingBankName}
+                  onChange={(e) => setBillingBankName(e.target.value)}
+                  style={inputStyle}
+                  placeholder="BancoEstado"
+                />
+              </div>
+
+              <div>
+                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                  Tipo de cuenta
+                </div>
+                <input
+                  value={billingAccountType}
+                  onChange={(e) => setBillingAccountType(e.target.value)}
+                  style={inputStyle}
+                  placeholder="Cuenta Corriente"
+                />
+              </div>
+
+              <div>
+                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                  Número de cuenta
+                </div>
+                <input
+                  value={billingAccountNumber}
+                  onChange={(e) => setBillingAccountNumber(e.target.value)}
+                  style={inputStyle}
+                  placeholder="12345678"
+                />
+              </div>
+
+              <div>
+                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                  Titular
+                </div>
+                <input
+                  value={billingAccountHolder}
+                  onChange={(e) => setBillingAccountHolder(e.target.value)}
+                  style={inputStyle}
+                  placeholder="RentaControl SpA"
+                />
+              </div>
+
+              <div>
+                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                  RUT
+                </div>
+                <input
+                  value={billingAccountRut}
+                  onChange={(e) => setBillingAccountRut(e.target.value)}
+                  style={inputStyle}
+                  placeholder="12.345.678-9"
+                />
+              </div>
+
+              <div style={{ gridColumn: "1 / span 3" }}>
+                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                  Email de confirmación
+                </div>
+                <input
+                  value={billingTransferEmail}
+                  onChange={(e) => setBillingTransferEmail(e.target.value)}
+                  style={inputStyle}
+                  placeholder="notificaciones@rentacontrol.cl"
+                  type="email"
+                />
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: 14,
+                display: "flex",
+                gap: 10,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                onClick={savePlatformBillingConfig}
+                disabled={savingBillingConfig}
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: 12,
+                  background: "#0f172a",
+                  color: "#fff",
+                  border: "none",
+                  cursor: savingBillingConfig ? "not-allowed" : "pointer",
+                  opacity: savingBillingConfig ? 0.7 : 1,
+                  fontWeight: 700,
+                }}
+              >
+                {savingBillingConfig ? "Guardando..." : "Guardar cobro SaaS"}
+              </button>
+
+              {billingConfigMsg && (
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: billingConfigMsg.includes("✅")
+                      ? "#16a34a"
+                      : "#b91c1c",
+                    fontWeight: 600,
+                  }}
+                >
+                  {billingConfigMsg}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
       <div
         style={{
