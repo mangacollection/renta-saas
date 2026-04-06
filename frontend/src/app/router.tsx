@@ -16,6 +16,7 @@ import AccountPage from "@/features/account/AccountPage";
 import MenuPage from "@/pages/MenuPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import HelpPage from "@/pages/HelpPage";
+import AdminPricingPage from "@/features/admin/AdminPricingPage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -46,6 +47,7 @@ export const router = createBrowserRouter([
           { path: "account-payments", element: <AdminAccountPaymentsPage /> },
           { path: "accounts", element: <AdminAccountsPage /> },
           { path: "observability", element: <AdminObservabilityPage /> },
+          { path: "pricing", element: <AdminPricingPage /> },
         ],
       },
     ],

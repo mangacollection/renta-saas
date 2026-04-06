@@ -51,23 +51,20 @@ recordatorio amable
 Entrega SOLO el mensaje final.
 `;
 
-    // 1️⃣ Intento con Gemini
     try {
       const message = await this.geminiProvider.generateText(prompt);
       return { message };
-    } catch (error) {
+    } catch {
       this.logger.warn('Gemini failed, trying OpenAI...');
     }
 
-    // 2️⃣ Fallback a OpenAI
     try {
       const message = await this.openAiProvider.generateText(prompt);
       return { message };
-    } catch (error) {
+    } catch {
       this.logger.error('OpenAI fallback failed');
     }
 
-    // 3️⃣ Fallback final seguro
     const fallback = `Hola ${input.tenantName},
 
 Te escribo por el arriendo de ${input.propertyName}.
@@ -83,7 +80,59 @@ Por favor, revisa y me confirmas. Gracias.`;
     return { message: fallback };
   }
 
-  // 🚀 NUEVO: generación de email de cobranza con IA
+  // 🔴 NUEVO MÉTODO (WHATSAPP SAAS)
+  async generateWhatsAppPaymentMessage(): Promise<{ message: string }> {
+    this.logger.log('generateWhatsAppPaymentMessage called');
+
+    const prompt = `
+Eres un asistente de cobranza SaaS en Chile.
+
+Genera un mensaje de WhatsApp para cobrar una suscripción.
+
+Reglas:
+- Español chileno
+- Tono cercano pero profesional
+- Máximo 60 palabras
+- Sin markdown
+- No listas
+- Debe invitar a pagar ahora
+- Sonar humano (no robot)
+
+Entrega SOLO el mensaje.
+`;
+
+    // 1️⃣ Gemini
+    try {
+      const message = await this.geminiProvider.generateText(prompt);
+      if (message && message.length > 10) {
+        return { message };
+      }
+    } catch {
+      this.logger.warn('Gemini WhatsApp failed, trying OpenAI...');
+    }
+
+    // 2️⃣ OpenAI
+    try {
+      const message = await this.openAiProvider.generateText(prompt);
+      if (message && message.length > 10) {
+        return { message };
+      }
+    } catch {
+      this.logger.error('OpenAI WhatsApp fallback failed');
+    }
+
+    // 3️⃣ Fallback seguro
+    return {
+      message: `Hola 👋
+
+Tu suscripción de RentaControl está pendiente de pago.
+
+Puedes regularizarla ahora por transferencia o escribirme por aquí.
+
+Gracias 🙌`,
+    };
+  }
+
   async generateAccountReminderEmail(
     input: GenerateAccountReminderEmailInput,
   ): Promise<GenerateAccountReminderEmailResult> {
@@ -97,13 +146,12 @@ Genera el contenido de un correo de cobranza claro, humano y orientado a acción
 Reglas:
 - Español chileno
 - Tono cordial pero firme
-- Máximo 120 palabras en el mensaje
-- No usar markdown
-- No usar listas
-- No sonar robótico ni legalista
+- Máximo 120 palabras
+- No markdown
+- No listas
 - Debe invitar a pagar ahora
 
-Debes devolver JSON válido con:
+Devuelve JSON:
 {
   "subject": "...",
   "title": "...",
@@ -116,38 +164,27 @@ Datos:
 Nombre: ${input.ownerName}
 Plan: ${input.planName}
 Monto: ${input.amount}
-Fecha de vencimiento: ${input.dueDate}
+Fecha: ${input.dueDate}
 Estado: ${input.billingStatus}
-Tipo de recordatorio: ${input.reminderType}
+Tipo: ${input.reminderType}
 
-Reglas adicionales:
-- Si es past_due → más directo
-- Si es before → más preventivo
-- CTA debe ser corto (ej: "Pagar ahora")
-- transferNote debe invitar a transferencia como alternativa
-
-Entrega SOLO el JSON.
+Entrega SOLO JSON.
 `;
 
-    // 1️⃣ Intento Gemini
     try {
       const raw = await this.geminiProvider.generateText(prompt);
-      const parsed = JSON.parse(raw);
-      return parsed;
-    } catch (error) {
+      return JSON.parse(raw);
+    } catch {
       this.logger.warn('Gemini email failed, trying OpenAI...');
     }
 
-    // 2️⃣ Fallback OpenAI
     try {
       const raw = await this.openAiProvider.generateText(prompt);
-      const parsed = JSON.parse(raw);
-      return parsed;
-    } catch (error) {
+      return JSON.parse(raw);
+    } catch {
       this.logger.error('OpenAI email fallback failed');
     }
 
-    // 3️⃣ Fallback seguro (CRÍTICO)
     return {
       subject:
         input.reminderType === 'past_due'
@@ -165,10 +202,10 @@ Tu plan ${input.planName} tiene un monto de $${input.amount} ${
           : `con vencimiento el ${input.dueDate}`
       }.
 
-Te recomendamos regularizarlo para evitar interrupciones.`,
+Te recomendamos regularizarlo.`,
       ctaLabel: 'Pagar ahora',
       transferNote:
-        'También puedes pagar mediante transferencia bancaria indicando tu cuenta.',
+        'También puedes pagar mediante transferencia bancaria.',
     };
   }
 }

@@ -57,39 +57,44 @@ enum TenantPaymentStatus {
 }
 
 model Account {
-  id               String        @id @default(cuid())
-  name             String
-  status           AccountStatus @default(active)
-  maxSubscriptions Int           @default(5)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  billingStartedAt DateTime?
-  billingStatus    String        @default("trial")
-  plan             String        @default("early_adopter")
-  planPrice        Int           @default(6990)
-  trialEndsAt      DateTime?
-  lastPaymentAt    DateTime?
-  nextPaymentDueAt DateTime?
+  id                 String        @id @default(cuid())
+  name               String
+  status             AccountStatus @default(active)
+  maxSubscriptions   Int           @default(5)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  // Billing
+  billingStartedAt   DateTime?
+  billingStatus      String        @default("trial")
+  plan               String        @default("early_adopter")
+  planPrice          Int           @default(6990)
+  trialEndsAt        DateTime?
+  lastPaymentAt      DateTime?
+  nextPaymentDueAt   DateTime?
   lastReminderSentAt DateTime?
   lastReminderType   String?
 
-    // 🔥 Billing config (cobranza)
-  billingPhone           String?
-  billingBankName        String?
-  billingAccountType     String?
-  billingAccountNumber   String?
-  billingAccountHolder   String?
-  billingAccountRut      String?
-  billingTransferEmail   String?
+  // Pricing versionado
+  pricingCode        String?
+  pricingLabel       String?
 
-  accountPayments AccountPayment[]
-  paymentSenders  PaymentSender[]
-  subscriptions   Subscription[]
-  users           User[]
-  tenants         Tenant[]
-  tenantPayments  TenantPayment[]
-  collectionEvents CollectionEvent[]
-  
+  // Billing config (cobranza)
+  billingPhone         String?
+  billingBankName      String?
+  billingAccountType   String?
+  billingAccountNumber String?
+  billingAccountHolder String?
+  billingAccountRut    String?
+  billingTransferEmail String?
+
+  accountPayments      AccountPayment[]
+  paymentSenders       PaymentSender[]
+  subscriptions        Subscription[]
+  users                User[]
+  tenants              Tenant[]
+  tenantPayments       TenantPayment[]
+  collectionEvents     CollectionEvent[]
   tenantPaymentSenders TenantPaymentSender[]
 }
 
@@ -335,6 +340,7 @@ model PaymentSender {
 
   @@unique([email, accountId])
 }
+
 model InvoiceItem {
   id        String   @id @default(cuid())
   invoiceId String
@@ -346,12 +352,14 @@ model InvoiceItem {
 
   @@index([invoiceId])
 }
+
 model AutomationRun {
   id              String   @id @default(cuid())
   executedAt      DateTime @default(now())
   totalInvoices   Int
   recommendations Int
 }
+
 model PlatformBillingConfig {
   id                   String   @id @default(cuid())
   billingPhone         String?
@@ -364,12 +372,29 @@ model PlatformBillingConfig {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
+
 model EmailLog {
   id        String   @id @default(cuid())
   accountId String?
   email     String
-  type      String   // before_3d | before_1d | past_due
-  status    String   // sent | failed
+  type      String
+  status    String
   error     String?
   createdAt DateTime @default(now())
+}
+
+model PricingConfig {
+  id           String   @id @default(cuid())
+  plan         String
+  pricingCode  String
+  pricingLabel String
+  price        Int
+  isActive     Boolean  @default(false)
+  startsAt     DateTime?
+  endsAt       DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([plan, isActive])
+  @@unique([plan, pricingCode])
 }

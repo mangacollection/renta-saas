@@ -27,6 +27,35 @@ export class AdminController {
     private readonly prisma: PrismaService,
   ) {}
 
+  @Get('pricing-stats')
+getPricingStats() {
+  return this.adminService.getPricingStats();
+}
+
+  @Post('pricing')
+createPricing(
+  @Body()
+  body: {
+    plan: string;
+    pricingCode: string;
+    pricingLabel: string;
+    price: number;
+    isActive?: boolean;
+  },
+) {
+  return this.adminService.createPricing(body);
+}
+
+@Get('pricing')
+listPricing(@Query('plan') plan?: string) {
+  return this.adminService.listPricing(plan);
+}
+  // 🔴 NUEVO ENDPOINT (WHATSAPP AI)
+  @Post('generate-whatsapp-message')
+  generateWhatsAppMessage() {
+    return this.adminService.generateWhatsAppMessage();
+  }
+
   @Post('run-billing-job')
   runBillingJob() {
     return this.accountBillingJob.run();
@@ -102,21 +131,23 @@ export class AdminController {
     return this.adminService.updateAccountBillingConfig(id, body);
   }
 
-@Post('accounts')
-createAccount(
-  @Body()
-  body: {
-    email: string;
-    phone?: string;
-    rut?: string;
-    plan: string;
-    planPrice: number;
-    firstName?: string;
-    lastName?: string;
-  },
-) {
-  return this.adminService.createAccountManual(body);
-}
+  @Post('accounts')
+  createAccount(
+    @Body()
+    body: {
+      email: string;
+      phone?: string;
+      rut?: string;
+      plan: string;
+      planPrice: number;
+      firstName?: string;
+      lastName?: string;
+      billingStatus?: 'trial' | 'active';
+      trialDays?: number;
+    },
+  ) {
+    return this.adminService.createAccountManual(body);
+  }
 
   @Post('users/onboard')
   onboardUser(@Body() body: { email: string; accountId: string }) {

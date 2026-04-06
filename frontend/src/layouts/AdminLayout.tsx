@@ -41,7 +41,7 @@ export default function AdminLayout() {
           padding: 16,
           display: "flex",
           flexDirection: "column",
-          gap: 16,
+          gap: 20,
         }}
       >
         <div>
@@ -53,6 +53,7 @@ export default function AdminLayout() {
           </div>
         </div>
 
+        {/* OPERACIÓN */}
         <div>
           <div
             style={{
@@ -63,13 +64,32 @@ export default function AdminLayout() {
               marginBottom: 8,
             }}
           >
-            Administración
+            Operación
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>
             <NavItem to="/admin/accounts" label="Cuentas" />
             <NavItem to="/admin/account-payments" label="Pagos SaaS" />
             <NavItem to="/admin/observability" label="Observabilidad" />
+          </div>
+        </div>
+
+        {/* CONFIGURACIÓN */}
+        <div>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: "#94a3b8",
+              textTransform: "uppercase",
+              marginBottom: 8,
+            }}
+          >
+            Configuración
+          </div>
+
+          <div style={{ display: "grid", gap: 6 }}>
+            <NavItem to="/admin/pricing" label="Pricing" />
           </div>
         </div>
       </aside>
