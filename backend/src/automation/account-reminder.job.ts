@@ -161,11 +161,13 @@ export class AccountReminderJob {
         </div>
       `;
 
-      await this.emailService.sendEmail({
-        to: owner.email,
-        subject: aiEmail.subject,
-        html,
-      });
+    await this.emailService.sendEmail({
+      to: owner.email,
+      subject: aiEmail.subject,
+      html,
+      type: reminderType,
+      accountId: acc.id,
+    });
 
       await this.prisma.account.update({
         where: { id: acc.id },

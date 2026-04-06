@@ -15,6 +15,7 @@ import { AdminService } from './admin.service';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { AccountBillingJob } from '../automation/account-billing.job';
 import { AccountReminderJob } from '../automation/account-reminder.job';
+import { PrismaService } from '../prisma/prisma.service';
 
 @UseGuards(FirebaseAuthGuard, AdminGuard)
 @Controller('admin')
@@ -23,6 +24,7 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly accountBillingJob: AccountBillingJob,
     private readonly accountReminderJob: AccountReminderJob,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Post('run-billing-job')
@@ -33,6 +35,15 @@ export class AdminController {
   @Post('run-reminder-job')
   runReminderJob() {
     return this.accountReminderJob.run();
+  }
+
+  @Get('email-logs')
+  getEmailLogs(@Query('status') status?: string, @Query('take') take?: string) {
+    return this.prisma.emailLog.findMany({
+      where: status ? { status } : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: take ? Number(take) : 50,
+    });
   }
 
   @Get('platform-billing-config')
@@ -91,19 +102,21 @@ export class AdminController {
     return this.adminService.updateAccountBillingConfig(id, body);
   }
 
-  @Post('accounts')
-  createAccount(
-    @Body()
-    body: {
-      email: string;
-      phone?: string;
-      rut?: string;
-      plan: string;
-      planPrice: number;
-    },
-  ) {
-    return this.adminService.createAccountManual(body);
-  }
+@Post('accounts')
+createAccount(
+  @Body()
+  body: {
+    email: string;
+    phone?: string;
+    rut?: string;
+    plan: string;
+    planPrice: number;
+    firstName?: string;
+    lastName?: string;
+  },
+) {
+  return this.adminService.createAccountManual(body);
+}
 
   @Post('users/onboard')
   onboardUser(@Body() body: { email: string; accountId: string }) {

@@ -201,47 +201,54 @@ create: {
   });
 }
 
-  async createAccountManual(input: {
-    email: string;
-    phone?: string;
-    rut?: string;
-    plan: string;
-    planPrice: number;
-  }) {
-    const { email, phone, rut, plan, planPrice } = input;
+async createAccountManual(input: {
+  email: string;
+  phone?: string;
+  rut?: string;
+  plan: string;
+  planPrice: number;
+  firstName?: string;
+  lastName?: string;
+}) {
+  const { email, phone, plan, planPrice, firstName, lastName } = input;
 
-    if (!email) {
-      throw new BadRequestException('email is required');
-    }
+  if (!email) {
+    throw new BadRequestException('email is required');
+  }
 
-    const existing = await this.prisma.user.findUnique({
-      where: { email },
-    });
+  const existing = await this.prisma.user.findUnique({
+    where: { email },
+  });
 
-    if (existing) {
-      throw new BadRequestException('Email already exists');
-    }
+  if (existing) {
+    throw new BadRequestException('Email already exists');
+  }
 
-    const now = new Date();
+  const now = new Date();
 
-    return this.prisma.account.create({
-      data: {
-        name: email,
-        plan,
-        planPrice,
-        billingStatus: 'trial',
-        trialEndsAt: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000),
-        users: {
-          create: {
-            email,
-            role: 'owner',
-            phone: phone || null,
-          },
+  const fullName =
+    [firstName?.trim(), lastName?.trim()]
+      .filter(Boolean)
+      .join(' ') || email;
+
+  return this.prisma.account.create({
+    data: {
+      name: fullName, // 👈 AQUÍ usamos nombre real
+      plan,
+      planPrice,
+      billingStatus: 'trial',
+      trialEndsAt: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000),
+      users: {
+        create: {
+          email,
+          role: 'owner',
+          phone: phone || null,
         },
       },
-      include: { users: true },
-    });
-  }
+    },
+    include: { users: true },
+  });
+}
 
   async listAccounts() {
     return this.prisma.account.findMany();
