@@ -385,8 +385,6 @@ export default function AppLayout() {
     if (location.pathname.startsWith("/menu")) return "Menú";
     if (location.pathname.startsWith("/notifications")) return "Notificaciones";
     if (location.pathname.startsWith("/help")) return "Ayuda";
-    if (location.pathname.startsWith("/admin/account-payments")) return "Pagos SaaS";
-    if (location.pathname.startsWith("/admin/accounts")) return "Cuentas";
     return "Renta Control";
   }, [location.pathname]);
 
@@ -394,22 +392,18 @@ export default function AppLayout() {
     setShowQuickActions(false);
   }, [location.pathname]);
 
- useEffect(() => {
-  async function checkNotifications() {
-    try {
-      // 🚫 TEMP: desactivado para admin MVP
-      const data = await getAutomationRecommendations();
-      setHasNotifications(data.length > 0);
-    } catch (err) {
-      console.error("Error loading notifications", err);
+  useEffect(() => {
+    async function checkNotifications() {
+      try {
+        const data = await getAutomationRecommendations();
+        setHasNotifications(data.length > 0);
+      } catch (err) {
+        console.error("Error loading notifications", err);
+      }
     }
-  }
 
-  // 🚫 TEMP: evitar ejecución para estabilizar admin
-  if (!location.pathname.startsWith("/admin")) {
     checkNotifications();
-  }
-}, [location.pathname]);
+  }, [location.pathname]);
 
   async function handleLogout() {
     setShowQuickActions(false);

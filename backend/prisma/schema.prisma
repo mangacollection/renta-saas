@@ -364,3 +364,12 @@ model PlatformBillingConfig {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
+model EmailLog {
+  id        String   @id @default(cuid())
+  accountId String?
+  email     String
+  type      String   // before_3d | before_1d | past_due
+  status    String   // sent | failed
+  error     String?
+  createdAt DateTime @default(now())
+}
