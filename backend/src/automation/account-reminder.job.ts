@@ -16,6 +16,20 @@ export class AccountReminderJob {
   async run() {
     const now = new Date();
 
+    // 🔥 1. Convertir trials vencidos a past_due
+await this.prisma.account.updateMany({
+  where: {
+    billingStatus: 'trial',
+    trialEndsAt: {
+      not: null,
+      lt: now,
+    },
+  },
+  data: {
+    billingStatus: 'past_due',
+  },
+});
+
     // 🔥 traer config global SaaS
     const platformConfig = await this.prisma.platformBillingConfig.findFirst();
 

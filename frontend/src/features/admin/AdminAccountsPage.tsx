@@ -26,6 +26,19 @@ type PlatformBillingConfig = {
   updatedAt: string;
 };
 
+type PricingConfig = {
+  id: string;
+  plan: string;
+  pricingCode: string;
+  pricingLabel: string;
+  price: number;
+  isActive: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "10px 12px",
@@ -115,6 +128,7 @@ function StatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase();
   const isActive = normalized === "active";
   const isPastDue = normalized === "past_due";
+  const isTrial = normalized === "trial";
 
   return (
     <span
@@ -125,8 +139,20 @@ function StatusBadge({ status }: { status: string }) {
         borderRadius: 999,
         fontSize: 12,
         fontWeight: 700,
-        background: isActive ? "#dcfce7" : isPastDue ? "#fee2e2" : "#ede9fe",
-        color: isActive ? "#166534" : isPastDue ? "#991b1b" : "#5b21b6",
+        background: isActive
+          ? "#dcfce7"
+          : isPastDue
+            ? "#fee2e2"
+            : isTrial
+              ? "#ede9fe"
+              : "#e2e8f0",
+        color: isActive
+          ? "#166534"
+          : isPastDue
+            ? "#991b1b"
+            : isTrial
+              ? "#5b21b6"
+              : "#475569",
         textTransform: "capitalize",
       }}
     >
@@ -175,16 +201,24 @@ function PreviewCard({
     </div>
   );
 }
+
 export default function AdminAccountsPage() {
   const [accounts, setAccounts] = useState<AccountOverview[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [pricings, setPricings] = useState<PricingConfig[]>([]);
+  const [loadingPricing, setLoadingPricing] = useState(true);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [rut, setRut] = useState("");
+  const [billingStatus, setBillingStatus] = useState<"trial" | "active">(
+    "trial"
+  );
+  const [trialDays, setTrialDays] = useState("14");
   const [creating, setCreating] = useState(false);
   const [createMsg, setCreateMsg] = useState<string | null>(null);
 
@@ -202,10 +236,13 @@ export default function AdminAccountsPage() {
   const [billingAccountHolder, setBillingAccountHolder] = useState("");
   const [billingAccountRut, setBillingAccountRut] = useState("");
   const [billingTransferEmail, setBillingTransferEmail] = useState("");
- 
+
   const [loadingBillingConfig, setLoadingBillingConfig] = useState(true);
   const [savingBillingConfig, setSavingBillingConfig] = useState(false);
   const [billingConfigMsg, setBillingConfigMsg] = useState<string | null>(null);
+
+  const [testingReminder, setTestingReminder] = useState(false);
+  const [testMsg, setTestMsg] = useState<string | null>(null);
 
   async function loadAccounts() {
     try {
@@ -220,6 +257,18 @@ export default function AdminAccountsPage() {
     }
   }
 
+  async function loadPricing() {
+    try {
+      setLoadingPricing(true);
+      const res = await api.get<PricingConfig[]>("/admin/pricing");
+      setPricings(res.data);
+    } catch {
+      console.error("Error cargando pricing");
+    } finally {
+      setLoadingPricing(false);
+    }
+  }
+
   async function loadPlatformBillingConfig() {
     try {
       setLoadingBillingConfig(true);
@@ -229,7 +278,6 @@ export default function AdminAccountsPage() {
         "/admin/platform-billing-config"
       );
 
-      
       setBillingPhone(res.data.billingPhone ?? "");
       setBillingBankName(res.data.billingBankName ?? "");
       setBillingAccountType(res.data.billingAccountType ?? "");
@@ -264,7 +312,6 @@ export default function AdminAccountsPage() {
         payload
       );
 
-     
       setBillingPhone(res.data.billingPhone ?? "");
       setBillingBankName(res.data.billingBankName ?? "");
       setBillingAccountType(res.data.billingAccountType ?? "");
@@ -289,6 +336,73 @@ export default function AdminAccountsPage() {
     }
   }
 
+  async function runReminderTest() {
+    try {
+      setTestingReminder(true);
+      setTestMsg(null);
+
+      await api.post("/admin/run-reminder-job");
+
+      setTestMsg("Email de prueba enviado ✅");
+    } catch (err: any) {
+      const backendMsg =
+        typeof err?.response?.data?.message === "string"
+          ? err.response.data.message
+          : null;
+
+      setTestMsg(
+        backendMsg
+          ? `${backendMsg} ❌`
+          : "Error enviando test de cobro ❌"
+      );
+    } finally {
+      setTestingReminder(false);
+    }
+  }
+
+  async function openWhatsAppBillingTest() {
+    if (!billingPhone) {
+      alert("No hay teléfono de cobranza configurado");
+      return;
+    }
+
+    const phone = billingPhone.replace(/\D/g, "");
+
+    try {
+      const res = await api.post("/admin/generate-whatsapp-message");
+
+      const aiMessage =
+        typeof res.data?.message === "string" && res.data.message.trim().length > 0
+          ? res.data.message.trim()
+          : null;
+
+      const fallbackMessage = `Hola 👋
+
+Tu suscripción de RentaControl está pendiente de pago.
+
+Puedes regularizarla ahora por transferencia o escribirme por aquí.
+
+Gracias 🙌`;
+
+      const messageToSend = aiMessage ?? fallbackMessage;
+      const encodedText = encodeURIComponent(messageToSend);
+
+      window.open(`https://wa.me/${phone}?text=${encodedText}`, "_blank");
+    } catch {
+      const fallbackMessage = `Hola 👋
+
+Tu suscripción de RentaControl está pendiente de pago.
+
+Puedes regularizarla ahora por transferencia o escribirme por aquí.
+
+Gracias 🙌`;
+
+      const encodedText = encodeURIComponent(fallbackMessage);
+
+      window.open(`https://wa.me/${phone}?text=${encodedText}`, "_blank");
+    }
+  }
+
   async function createOwner() {
     try {
       setCreating(true);
@@ -301,8 +415,15 @@ export default function AdminAccountsPage() {
         lastName: lastName.trim(),
         phone: phone.trim() || undefined,
         rut: rut.trim() || undefined,
-        plan: "early_adopter",
-        planPrice: 6990,
+        plan: activePricing?.plan ?? "early_adopter",
+        planPrice: activePricing?.price ?? 6990,
+        billingStatus,
+        trialDays:
+          billingStatus === "trial"
+            ? Number(trialDays) > 0
+              ? Number(trialDays)
+              : 14
+            : undefined,
       });
 
       setCreateMsg("Owner creado correctamente ✅");
@@ -311,8 +432,11 @@ export default function AdminAccountsPage() {
       setEmail("");
       setPhone("");
       setRut("");
+      setBillingStatus("trial");
+      setTrialDays("14");
 
       await loadAccounts();
+      await loadPricing();
     } catch (err: any) {
       const backendMsg =
         err?.response?.data?.message &&
@@ -402,6 +526,7 @@ export default function AdminAccountsPage() {
   useEffect(() => {
     loadAccounts();
     loadPlatformBillingConfig();
+    loadPricing();
   }, []);
 
   const stats = useMemo(() => {
@@ -412,6 +537,10 @@ export default function AdminAccountsPage() {
 
     return { total, active, pastDue, totalPaid };
   }, [accounts]);
+
+  const activePricing = useMemo(() => {
+    return pricings.find((pricing) => pricing.isActive) ?? null;
+  }, [pricings]);
 
   if (loading) {
     return (
@@ -472,6 +601,7 @@ export default function AdminAccountsPage() {
             onClick={() => {
               void loadAccounts();
               void loadPlatformBillingConfig();
+              void loadPricing();
             }}
             style={{
               padding: "10px 16px",
@@ -500,129 +630,214 @@ export default function AdminAccountsPage() {
         <StatCard label="Total pagado" value={formatCurrency(stats.totalPaid)} />
       </div>
 
-<div style={{ ...cardStyle, padding: 18 }}>
-  <SectionTitle
-    title="Configuración de cobro SaaS"
-    subtitle="Estos datos se usan en los emails y WhatsApp de cobranza."
-  />
+      <div style={{ ...cardStyle, padding: 18 }}>
+        <SectionTitle
+          title="Pricing activo"
+          subtitle="Se carga desde el mantenedor y lo usarán las nuevas cuentas."
+        />
 
-  {loadingBillingConfig ? (
-    <div style={{ fontSize: 14, color: "#64748b" }}>
-      Cargando configuración SaaS...
-    </div>
-  ) : (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)",
-        gap: 16,
-      }}
-    >
-      {/* FORM */}
-      <div style={{ display: "grid", gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
-            WhatsApp cobranza
+        {loadingPricing ? (
+          <div style={{ fontSize: 14, color: "#64748b" }}>
+            Cargando pricing...
           </div>
-          <input
-            value={billingPhone}
-            onChange={(e) =>
-              setBillingPhone(e.target.value.replace(/[^\d]/g, ""))
-            }
-            style={inputStyle}
-          />
-        </div>
+        ) : activePricing ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 12,
+            }}
+          >
+            <PreviewCard title="Plan">
+              <div style={{ fontSize: 14, fontWeight: 700 }}>
+                {activePricing.plan}
+              </div>
+            </PreviewCard>
 
-        <div>
-          <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
-            Email confirmación
+            <PreviewCard title="Código">
+              <div style={{ fontSize: 14, fontWeight: 700 }}>
+                {activePricing.pricingCode}
+              </div>
+            </PreviewCard>
+
+            <PreviewCard title="Etiqueta">
+              <div style={{ fontSize: 14, fontWeight: 700 }}>
+                {activePricing.pricingLabel}
+              </div>
+            </PreviewCard>
+
+            <PreviewCard title="Precio">
+              <div style={{ fontSize: 14, fontWeight: 700 }}>
+                {formatCurrency(activePricing.price)}
+              </div>
+            </PreviewCard>
           </div>
-          <input
-            value={billingTransferEmail}
-            onChange={(e) => setBillingTransferEmail(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
-
-        <div>
-          <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
-            Banco
+        ) : (
+          <div style={{ fontSize: 14, color: "#64748b" }}>
+            No hay pricing activo configurado todavía.
           </div>
-          <input
-            value={billingBankName}
-            onChange={(e) => setBillingBankName(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
-
-        <div>
-          <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
-            Tipo cuenta
-          </div>
-          <input
-            value={billingAccountType}
-            onChange={(e) => setBillingAccountType(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
-
-        <div>
-          <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
-            Número cuenta
-          </div>
-          <input
-            value={billingAccountNumber}
-            onChange={(e) => setBillingAccountNumber(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
-
-        <div>
-          <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
-            Titular
-          </div>
-          <input
-            value={billingAccountHolder}
-            onChange={(e) => setBillingAccountHolder(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
-
-        <div>
-          <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
-            RUT
-          </div>
-          <input
-            value={billingAccountRut}
-            onChange={(e) => setBillingAccountRut(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
-
-        <button
-          onClick={savePlatformBillingConfig}
-          disabled={savingBillingConfig}
-          style={{
-            marginTop: 10,
-            padding: "12px",
-            borderRadius: 12,
-            background: "#0f172a",
-            color: "#fff",
-            border: "none",
-            fontWeight: 700,
-          }}
-        >
-          {savingBillingConfig ? "Guardando..." : "Guardar configuración"}
-        </button>
-
-        {billingConfigMsg && (
-          <div style={{ fontSize: 13 }}>{billingConfigMsg}</div>
         )}
       </div>
 
-      {/* PREVIEW */}
-      <PreviewCard title="Preview mensaje">
-        <div style={{ whiteSpace: "pre-line", fontSize: 13 }}>
+      <div style={{ ...cardStyle, padding: 18 }}>
+        <SectionTitle
+          title="Configuración de cobro SaaS"
+          subtitle="Estos datos se usan en los emails y WhatsApp de cobranza."
+        />
+
+        {loadingBillingConfig ? (
+          <div style={{ fontSize: 14, color: "#64748b" }}>
+            Cargando configuración SaaS...
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)",
+              gap: 16,
+            }}
+          >
+            <div style={{ display: "grid", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                  WhatsApp cobranza
+                </div>
+                <input
+                  value={billingPhone}
+                  onChange={(e) =>
+                    setBillingPhone(e.target.value.replace(/[^\d]/g, ""))
+                  }
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                  Email confirmación
+                </div>
+                <input
+                  value={billingTransferEmail}
+                  onChange={(e) => setBillingTransferEmail(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                  Banco
+                </div>
+                <input
+                  value={billingBankName}
+                  onChange={(e) => setBillingBankName(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                  Tipo cuenta
+                </div>
+                <input
+                  value={billingAccountType}
+                  onChange={(e) => setBillingAccountType(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                  Número cuenta
+                </div>
+                <input
+                  value={billingAccountNumber}
+                  onChange={(e) => setBillingAccountNumber(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                  Titular
+                </div>
+                <input
+                  value={billingAccountHolder}
+                  onChange={(e) => setBillingAccountHolder(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                  RUT
+                </div>
+                <input
+                  value={billingAccountRut}
+                  onChange={(e) => setBillingAccountRut(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <button
+                onClick={savePlatformBillingConfig}
+                disabled={savingBillingConfig}
+                style={{
+                  marginTop: 10,
+                  padding: "12px",
+                  borderRadius: 12,
+                  background: "#0f172a",
+                  color: "#fff",
+                  border: "none",
+                  fontWeight: 700,
+                  cursor: savingBillingConfig ? "not-allowed" : "pointer",
+                  opacity: savingBillingConfig ? 0.7 : 1,
+                }}
+              >
+                {savingBillingConfig ? "Guardando..." : "Guardar configuración"}
+              </button>
+
+              <button
+                onClick={runReminderTest}
+                disabled={testingReminder}
+                style={{
+                  marginTop: 10,
+                  padding: "12px",
+                  borderRadius: 12,
+                  background: "#6d5efc",
+                  color: "#fff",
+                  border: "none",
+                  fontWeight: 700,
+                  cursor: testingReminder ? "not-allowed" : "pointer",
+                  opacity: testingReminder ? 0.7 : 1,
+                }}
+              >
+                {testingReminder ? "Enviando..." : "Enviar test de cobro"}
+              </button>
+
+              <button
+                onClick={openWhatsAppBillingTest}
+                style={{
+                  marginTop: 10,
+                  padding: "12px",
+                  borderRadius: 12,
+                  background: "#6d5efc",
+                  color: "#fff",
+                  border: "none",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Abrir WhatsApp test
+              </button>
+
+              {testMsg && <div style={{ fontSize: 13 }}>{testMsg}</div>}
+
+              {billingConfigMsg && (
+                <div style={{ fontSize: 13 }}>{billingConfigMsg}</div>
+              )}
+            </div>
+
+            <PreviewCard title="Preview mensaje">
+              <div style={{ whiteSpace: "pre-line", fontSize: 13 }}>
 {`Hola 👋
 
 Para regularizar tu plan RentaControl puedes transferir a:
@@ -638,16 +853,16 @@ ${billingTransferEmail || "-"}
 
 O escribir a WhatsApp:
 ${billingPhone || "-"}`}
-        </div>
-      </PreviewCard>
-    </div>
-  )}
-</div>
+              </div>
+            </PreviewCard>
+          </div>
+        )}
+      </div>
 
       <div style={{ ...cardStyle, padding: 18 }}>
         <SectionTitle
           title="Crear cuenta"
-          subtitle="Alta rápida de una nueva cuenta en plan early_adopter."
+          subtitle="Alta rápida de una nueva cuenta usando el pricing activo."
         />
 
         <div
@@ -717,6 +932,38 @@ ${billingPhone || "-"}`}
               placeholder="12.345.678-9"
             />
           </div>
+
+          <div>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+              Estado inicial
+            </div>
+            <select
+              value={billingStatus}
+              onChange={(e) =>
+                setBillingStatus(e.target.value as "trial" | "active")
+              }
+              style={inputStyle}
+            >
+              <option value="trial">Trial</option>
+              <option value="active">Active</option>
+            </select>
+          </div>
+
+          {billingStatus === "trial" && (
+            <div>
+              <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                Días de trial
+              </div>
+              <input
+                value={trialDays}
+                onChange={(e) =>
+                  setTrialDays(e.target.value.replace(/[^\d]/g, ""))
+                }
+                style={inputStyle}
+                placeholder="14"
+              />
+            </div>
+          )}
         </div>
 
         <div
@@ -730,8 +977,16 @@ ${billingPhone || "-"}`}
             color: "#475569",
           }}
         >
-          Plan: <b>early_adopter</b> · Precio: <b>$6.990</b> · Estado inicial:{" "}
-          <b>trial</b>
+          Plan: <b>{activePricing?.plan ?? "early_adopter"}</b> · Precio:{" "}
+          <b>{activePricing ? formatCurrency(activePricing.price) : "$6.990"}</b> ·
+          Cohorte: <b>{activePricing?.pricingLabel ?? "Sin pricing activo"}</b> ·
+          Estado inicial: <b>{billingStatus}</b>
+          {billingStatus === "trial" ? (
+            <>
+              {" "}
+              · Trial: <b>{Number(trialDays) > 0 ? trialDays : "14"} días</b>
+            </>
+          ) : null}
         </div>
 
         <div style={{ marginTop: 14 }}>

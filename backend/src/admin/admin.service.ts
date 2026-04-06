@@ -1,9 +1,123 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AiService } from '../ai/ai.service';
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly aiService: AiService,
+  ) {}
+
+  async getPricingStats() {
+  const accounts = await this.prisma.account.findMany({
+    select: {
+      id: true,
+      plan: true,
+      planPrice: true,
+      pricingCode: true,
+      pricingLabel: true,
+    },
+  });
+
+  const grouped = new Map<
+    string,
+    {
+      plan: string;
+      pricingCode: string;
+      pricingLabel: string;
+      count: number;
+      revenue: number;
+    }
+  >();
+
+  for (const account of accounts) {
+    const pricingCode = account.pricingCode ?? "Legacy";
+    const pricingLabel = account.pricingLabel ?? "Legacy";
+    const key = `${account.plan}__${pricingCode}`;
+
+    const current = grouped.get(key);
+
+    if (current) {
+      current.count += 1;
+      current.revenue += Number(account.planPrice || 0);
+      continue;
+    }
+
+    grouped.set(key, {
+      plan: account.plan,
+      pricingCode,
+      pricingLabel,
+      count: 1,
+      revenue: Number(account.planPrice || 0),
+    });
+  }
+
+  return Array.from(grouped.values()).sort((a, b) => b.count - a.count);
+}
+
+  async listPricing(plan?: string) {
+  return this.prisma.pricingConfig.findMany({
+    where: plan ? { plan } : undefined,
+    orderBy: [
+      { isActive: 'desc' },
+      { createdAt: 'desc' },
+    ],
+  });
+}
+ async createPricing(input: {
+  plan: string;
+  pricingCode: string;
+  pricingLabel: string;
+  price: number;
+  isActive?: boolean;
+  startsAt?: Date | null;
+  endsAt?: Date | null;
+}) {
+  const {
+    plan,
+    pricingCode,
+    pricingLabel,
+    price,
+    isActive,
+    startsAt,
+    endsAt,
+  } = input;
+
+  if (!plan) throw new BadRequestException('plan is required');
+  if (!pricingCode) throw new BadRequestException('pricingCode is required');
+  if (!pricingLabel) throw new BadRequestException('pricingLabel is required');
+  if (!price || price <= 0) {
+    throw new BadRequestException('price must be greater than 0');
+  }
+
+  if (startsAt && endsAt && new Date(startsAt) > new Date(endsAt)) {
+    throw new BadRequestException('startsAt must be before endsAt');
+  }
+
+  if (isActive) {
+    await this.prisma.pricingConfig.updateMany({
+      where: { plan },
+      data: { isActive: false },
+    });
+  }
+
+  return this.prisma.pricingConfig.create({
+    data: {
+      plan,
+      pricingCode,
+      pricingLabel,
+      price,
+      isActive: isActive ?? false,
+      startsAt: startsAt ?? null,
+      endsAt: endsAt ?? null,
+    },
+  });
+}
+
+  async generateWhatsAppMessage() {
+    return this.aiService.generateWhatsAppPaymentMessage();
+  }
 
   async updateBillingStatus(
     id: string,
@@ -129,79 +243,79 @@ export class AdminService {
     });
   }
 
-async getPlatformBillingConfig() {
-  let config = await this.prisma.platformBillingConfig.findFirst();
+  async getPlatformBillingConfig() {
+    let config = await this.prisma.platformBillingConfig.findFirst();
 
-  if (!config) {
-    config = await this.prisma.platformBillingConfig.create({
-      data: {},
+    if (!config) {
+      config = await this.prisma.platformBillingConfig.create({
+        data: {},
+      });
+    }
+
+    return config;
+  }
+
+  async updatePlatformBillingConfig(input: {
+    billingPhone?: string;
+    billingBankName?: string;
+    billingAccountType?: string;
+    billingAccountNumber?: string;
+    billingAccountHolder?: string;
+    billingAccountRut?: string;
+    billingTransferEmail?: string;
+  }) {
+    let config = await this.prisma.platformBillingConfig.findFirst();
+
+    if (!config) {
+      config = await this.prisma.platformBillingConfig.create({
+        data: {},
+      });
+    }
+
+    const normalizeNullable = (value?: string) => {
+      if (value === undefined) return undefined;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    };
+
+    const normalizePhone = (value?: string) => {
+      if (value === undefined) return undefined;
+      const digits = value.replace(/\D/g, '');
+      return digits.length > 0 ? digits : null;
+    };
+
+    const billingTransferEmail = normalizeNullable(input.billingTransferEmail);
+    if (
+      billingTransferEmail &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billingTransferEmail)
+    ) {
+      throw new BadRequestException('billingTransferEmail is invalid');
+    }
+
+    return this.prisma.platformBillingConfig.upsert({
+      where: { id: config.id },
+      update: {
+        billingPhone: normalizePhone(input.billingPhone),
+        billingBankName: normalizeNullable(input.billingBankName),
+        billingAccountType: normalizeNullable(input.billingAccountType),
+        billingAccountNumber: normalizeNullable(input.billingAccountNumber),
+        billingAccountHolder: normalizeNullable(input.billingAccountHolder),
+        billingAccountRut: normalizeNullable(input.billingAccountRut),
+        billingTransferEmail,
+      },
+      create: {
+        billingPhone: normalizePhone(input.billingPhone),
+        billingBankName: normalizeNullable(input.billingBankName),
+        billingAccountType: normalizeNullable(input.billingAccountType),
+        billingAccountNumber: normalizeNullable(input.billingAccountNumber),
+        billingAccountHolder: normalizeNullable(input.billingAccountHolder),
+        billingAccountRut: normalizeNullable(input.billingAccountRut),
+        billingTransferEmail,
+      },
     });
   }
 
-  return config;
-}
-
-async updatePlatformBillingConfig(input: {
-  billingPhone?: string;
-  billingBankName?: string;
-  billingAccountType?: string;
-  billingAccountNumber?: string;
-  billingAccountHolder?: string;
-  billingAccountRut?: string;
-  billingTransferEmail?: string;
-}) {
-  let config = await this.prisma.platformBillingConfig.findFirst();
-
-  if (!config) {
-    config = await this.prisma.platformBillingConfig.create({
-      data: {},
-    });
-  }
-
-  const normalizeNullable = (value?: string) => {
-    if (value === undefined) return undefined;
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  };
-
-  const normalizePhone = (value?: string) => {
-    if (value === undefined) return undefined;
-    const digits = value.replace(/\D/g, '');
-    return digits.length > 0 ? digits : null;
-  };
-
-  const billingTransferEmail = normalizeNullable(input.billingTransferEmail);
-  if (
-    billingTransferEmail &&
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billingTransferEmail)
-  ) {
-    throw new BadRequestException('billingTransferEmail is invalid');
-  }
-
-  return this.prisma.platformBillingConfig.upsert({
-    where: { id: config.id },
-   update: {
-  billingPhone: normalizePhone(input.billingPhone),
-  billingBankName: normalizeNullable(input.billingBankName),
-  billingAccountType: normalizeNullable(input.billingAccountType),
-  billingAccountNumber: normalizeNullable(input.billingAccountNumber),
-  billingAccountHolder: normalizeNullable(input.billingAccountHolder),
-  billingAccountRut: normalizeNullable(input.billingAccountRut),
-  billingTransferEmail,
-},
-create: {
-  billingPhone: normalizePhone(input.billingPhone),
-  billingBankName: normalizeNullable(input.billingBankName),
-  billingAccountType: normalizeNullable(input.billingAccountType),
-  billingAccountNumber: normalizeNullable(input.billingAccountNumber),
-  billingAccountHolder: normalizeNullable(input.billingAccountHolder),
-  billingAccountRut: normalizeNullable(input.billingAccountRut),
-  billingTransferEmail,
-},
-  });
-}
-
-async createAccountManual(input: {
+  async createAccountManual(input: {
   email: string;
   phone?: string;
   rut?: string;
@@ -209,11 +323,26 @@ async createAccountManual(input: {
   planPrice: number;
   firstName?: string;
   lastName?: string;
+  billingStatus?: 'trial' | 'active';
+  trialDays?: number;
 }) {
-  const { email, phone, plan, planPrice, firstName, lastName } = input;
+  const {
+    email,
+    phone,
+    plan,
+    planPrice,
+    firstName,
+    lastName,
+    billingStatus,
+    trialDays,
+  } = input;
 
   if (!email) {
     throw new BadRequestException('email is required');
+  }
+
+  if (!plan) {
+    throw new BadRequestException('plan is required');
   }
 
   const existing = await this.prisma.user.findUnique({
@@ -224,6 +353,21 @@ async createAccountManual(input: {
     throw new BadRequestException('Email already exists');
   }
 
+  // 🔥 pricing activo
+  const activePricing = await this.prisma.pricingConfig.findFirst({
+    where: {
+      plan,
+      isActive: true,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+
+  const effectivePlanPrice = activePricing?.price ?? planPrice;
+  const effectivePricingCode = activePricing?.pricingCode ?? null;
+  const effectivePricingLabel = activePricing?.pricingLabel ?? null;
+
   const now = new Date();
 
   const fullName =
@@ -231,13 +375,39 @@ async createAccountManual(input: {
       .filter(Boolean)
       .join(' ') || email;
 
+  // 🔥 lógica de estado inicial
+  const finalStatus = billingStatus ?? 'trial';
+
+  let data: any = {
+    name: fullName,
+    plan,
+    planPrice: effectivePlanPrice,
+    pricingCode: effectivePricingCode,
+    pricingLabel: effectivePricingLabel,
+    billingStatus: finalStatus,
+  };
+
+  if (finalStatus === 'trial') {
+    const days = trialDays && trialDays > 0 ? trialDays : 14;
+
+    data.trialEndsAt = new Date(
+      now.getTime() + days * 24 * 60 * 60 * 1000,
+    );
+  }
+
+  if (finalStatus === 'active') {
+    const nextPaymentDueAt = new Date(now);
+    nextPaymentDueAt.setMonth(nextPaymentDueAt.getMonth() + 1);
+
+    data.billingStartedAt = now;
+    data.lastPaymentAt = now;
+    data.nextPaymentDueAt = nextPaymentDueAt;
+    data.trialEndsAt = null;
+  }
+
   return this.prisma.account.create({
     data: {
-      name: fullName, // 👈 AQUÍ usamos nombre real
-      plan,
-      planPrice,
-      billingStatus: 'trial',
-      trialEndsAt: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000),
+      ...data,
       users: {
         create: {
           email,
