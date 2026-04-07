@@ -23,10 +23,56 @@ const initialValues: FormValues = {
   message: "",
 };
 
+function formatChileanPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
 
+  let normalized = digits;
 
-function normalizePhone(phone: string) {
-  return phone.replace(/\s+/g, "").trim();
+  if (normalized.startsWith("56")) {
+    normalized = normalized.slice(2);
+  }
+
+  if (normalized.startsWith("0")) {
+    normalized = normalized.slice(1);
+  }
+
+  normalized = normalized.slice(0, 9);
+
+  if (!normalized) return "";
+
+  let result = "+56";
+
+  if (normalized.length > 0) {
+    result += ` ${normalized.slice(0, 1)}`;
+  }
+  if (normalized.length > 1) {
+    result += ` ${normalized.slice(1, 5)}`;
+  }
+  if (normalized.length > 5) {
+    result += ` ${normalized.slice(5, 9)}`;
+  }
+
+  return result;
+}
+
+function phoneToBackend(value: string) {
+  const digits = value.replace(/\D/g, "");
+
+  let normalized = digits;
+
+  if (normalized.startsWith("56")) {
+    normalized = normalized.slice(2);
+  }
+
+  if (normalized.startsWith("0")) {
+    normalized = normalized.slice(1);
+  }
+
+  normalized = normalized.slice(0, 9);
+
+  if (!normalized) return "";
+
+  return `+56${normalized}`;
 }
 
 function isValidEmail(email: string) {
@@ -34,12 +80,35 @@ function isValidEmail(email: string) {
 }
 
 function isValidChileanPhone(phone: string) {
-  const normalized = normalizePhone(phone);
-  return /^(\+569\d{8}|09\d{8}|9\d{8})$/.test(normalized);
+  const normalized = phoneToBackend(phone);
+  return /^\+569\d{8}$/.test(normalized);
 }
 
 function cleanRut(rut: string) {
   return rut.replace(/\./g, "").replace(/-/g, "").trim().toUpperCase();
+}
+
+function formatRut(value: string) {
+  const cleaned = cleanRut(value).replace(/[^0-9K]/gi, "");
+  if (!cleaned) return "";
+
+  const body = cleaned.slice(0, -1);
+  const dv = cleaned.slice(-1);
+
+  let formattedBody = "";
+  let count = 0;
+
+  for (let i = body.length - 1; i >= 0; i -= 1) {
+    formattedBody = body[i] + formattedBody;
+    count += 1;
+
+    if (count === 3 && i !== 0) {
+      formattedBody = "." + formattedBody;
+      count = 0;
+    }
+  }
+
+  return body ? `${formattedBody}-${dv}` : dv;
 }
 
 function isValidRut(rut: string) {
@@ -78,9 +147,23 @@ export default function SignupPage() {
   ) {
     const { name, value } = event.target;
 
+    let nextValue = value;
+
+    if (name === "phone") {
+      nextValue = formatChileanPhone(value);
+    }
+
+    if (name === "rut") {
+      nextValue = formatRut(value);
+    }
+
+    if (name === "properties") {
+      nextValue = value.replace(/[^\d]/g, "");
+    }
+
     setValues((current) => ({
       ...current,
-      [name]: value,
+      [name]: nextValue,
     }));
 
     setErrors((current) => ({
@@ -139,19 +222,19 @@ export default function SignupPage() {
       const result = await createPublicLead({
         name: values.name.trim(),
         email: values.email.trim(),
-        phone: normalizePhone(values.phone),
-        rut: values.rut.trim() || undefined,
+        phone: phoneToBackend(values.phone),
+        rut: values.rut.trim() ? formatRut(values.rut) : undefined,
         properties:
           values.properties.trim() === "" ? undefined : Number(values.properties),
         message: values.message.trim() || undefined,
       });
 
       if (result.success) {
-      setValues(initialValues);
-      setErrors({});
-      navigate("/gracias");
-      return;
-    }
+        setValues(initialValues);
+        setErrors({});
+        navigate("/gracias");
+        return;
+      }
 
       setSubmitError("No pudimos procesar tu solicitud. Intenta nuevamente.");
     } catch (error) {
@@ -175,7 +258,9 @@ export default function SignupPage() {
         }
       }
 
-      setSubmitError("No pudimos enviar tu solicitud. Intenta nuevamente en unos minutos.");
+      setSubmitError(
+        "No pudimos enviar tu solicitud. Intenta nuevamente en unos minutos.",
+      );
     } finally {
       setLoading(false);
     }
@@ -335,7 +420,6 @@ export default function SignupPage() {
                 value={values.name}
                 onChange={handleChange}
                 error={errors.name}
-                placeholder="Carolina Fuentes"
                 disabled={loading}
               />
 
@@ -346,7 +430,6 @@ export default function SignupPage() {
                 value={values.email}
                 onChange={handleChange}
                 error={errors.email}
-                placeholder="tu@email.com"
                 disabled={loading}
               />
 
@@ -356,7 +439,6 @@ export default function SignupPage() {
                 value={values.phone}
                 onChange={handleChange}
                 error={errors.phone}
-                placeholder="+56987654321"
                 disabled={loading}
               />
 
@@ -366,20 +448,18 @@ export default function SignupPage() {
                 value={values.rut}
                 onChange={handleChange}
                 error={errors.rut}
-                placeholder="12.345.678-9"
                 disabled={loading}
               />
 
               <Field
                 label="Número de propiedades"
                 name="properties"
-                type="number"
+                type="text"
                 value={values.properties}
                 onChange={handleChange}
                 error={errors.properties}
-                placeholder="3"
                 disabled={loading}
-                min={0}
+                inputMode="numeric"
               />
 
               <div>
@@ -402,7 +482,6 @@ export default function SignupPage() {
                   value={values.message}
                   onChange={handleChange}
                   disabled={loading}
-                  placeholder="Opcional"
                   rows={4}
                   style={{
                     width: "100%",
@@ -471,10 +550,9 @@ type FieldProps = {
   value: string;
   onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   error?: string;
-  placeholder?: string;
   disabled?: boolean;
   type?: string;
-  min?: number;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
 };
 
 function Field({
@@ -483,10 +561,9 @@ function Field({
   value,
   onChange,
   error,
-  placeholder,
   disabled,
   type = "text",
-  min,
+  inputMode,
 }: FieldProps) {
   return (
     <div>
@@ -509,9 +586,8 @@ function Field({
         type={type}
         value={value}
         onChange={onChange}
-        placeholder={placeholder}
         disabled={disabled}
-        min={min}
+        inputMode={inputMode}
         style={{
           width: "100%",
           border: `1px solid ${error ? "#f97066" : "#e4e7ec"}`,
