@@ -1088,7 +1088,7 @@ export function SubscriptionCreatePage() {
     try {
       setLoading(true);
       await activateSubscription({ subscriptionId });
-      navigate("/");
+      navigate("/app");
     } catch (e: any) {
       setError(normalizeError(e));
     } finally {
@@ -1685,7 +1685,7 @@ export function SubscriptionCreatePage() {
                   {loading ? "Activando..." : "Activar contrato"}
                 </ButtonPrimary>
 
-                <ButtonSoft onClick={() => navigate("/")} disabled={loading}>
+                <ButtonSoft onClick={() => navigate("/app")} disabled={loading}>
                   Volver a contratos
                 </ButtonSoft>
               </div>

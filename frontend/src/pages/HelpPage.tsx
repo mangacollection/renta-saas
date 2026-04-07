@@ -111,7 +111,7 @@ export default function HelpPage() {
 
       <button
         type="button"
-        onClick={() => navigate("/menu")}
+        onClick={() => navigate("app/menu")}
         style={{
           marginTop: 18,
           border: "1px solid #e2e8f0",

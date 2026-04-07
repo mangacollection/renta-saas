@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
 import { getAutomationRecommendations } from "@/features/invoices/invoices.api";
+import { appRoute } from "@/lib/routes";
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(
@@ -211,7 +212,7 @@ function NavItem({
 }) {
   const location = useLocation();
   const active =
-    location.pathname === to || (to !== "/" && location.pathname.startsWith(to));
+    location.pathname === to || location.pathname.startsWith(`${to}/`);
 
   function renderIcon() {
     if (variant === "home") return <HomeIcon active={active} />;
@@ -264,7 +265,7 @@ function MobileNavItem({
 }) {
   const location = useLocation();
   const active =
-    location.pathname === to || (to !== "/" && location.pathname.startsWith(to));
+    location.pathname === to || location.pathname.startsWith(`${to}/`);
 
   function renderIcon() {
     if (variant === "home") return <HomeIcon active={active} />;
@@ -376,15 +377,19 @@ export default function AppLayout() {
   const [hasNotifications, setHasNotifications] = useState(false);
 
   const pageTitle = useMemo(() => {
-    if (location.pathname === "/") return "Contratos";
-    if (location.pathname.startsWith("/subscriptions/new")) return "Contrato";
-    if (location.pathname.startsWith("/invoices")) return "Facturas";
-    if (location.pathname.startsWith("/tenant-payments")) return "Pagos";
-    if (location.pathname.startsWith("/tenant-payment-senders")) return "Remitentes";
-    if (location.pathname.startsWith("/account")) return "Mi cuenta";
-    if (location.pathname.startsWith("/menu")) return "Menú";
-    if (location.pathname.startsWith("/notifications")) return "Notificaciones";
-    if (location.pathname.startsWith("/help")) return "Ayuda";
+    if (location.pathname === appRoute()) return "Contratos";
+    if (location.pathname.startsWith(appRoute("subscriptions/new"))) return "Contrato";
+    if (location.pathname.startsWith(appRoute("invoices"))) return "Facturas";
+    if (location.pathname.startsWith(appRoute("tenant-payments"))) return "Pagos";
+    if (location.pathname.startsWith(appRoute("tenant-payment-senders"))) {
+      return "Remitentes";
+    }
+    if (location.pathname.startsWith(appRoute("account"))) return "Mi cuenta";
+    if (location.pathname.startsWith(appRoute("menu"))) return "Menú";
+    if (location.pathname.startsWith(appRoute("notifications"))) {
+      return "Notificaciones";
+    }
+    if (location.pathname.startsWith(appRoute("help"))) return "Ayuda";
     return "Renta Control";
   }, [location.pathname]);
 
@@ -402,7 +407,7 @@ export default function AppLayout() {
       }
     }
 
-    checkNotifications();
+    void checkNotifications();
   }, [location.pathname]);
 
   async function handleLogout() {
@@ -487,10 +492,18 @@ export default function AppLayout() {
             </div>
 
             <nav style={{ display: "grid", gap: 4 }}>
-              <NavItem to="/" label="Contratos" variant="home" />
-              <NavItem to="/invoices" label="Facturas" variant="document" />
-              <NavItem to="/tenant-payments" label="Pagos" variant="money" />
-              <NavItem to="/menu" label="Menú" variant="menu" />
+              <NavItem to={appRoute()} label="Contratos" variant="home" />
+              <NavItem
+                to={appRoute("invoices")}
+                label="Facturas"
+                variant="document"
+              />
+              <NavItem
+                to={appRoute("tenant-payments")}
+                label="Pagos"
+                variant="money"
+              />
+              <NavItem to={appRoute("menu")} label="Menú" variant="menu" />
             </nav>
           </div>
 
@@ -571,7 +584,7 @@ export default function AppLayout() {
                 minWidth: 0,
               }}
             >
-              {location.pathname !== "/" ? (
+              {location.pathname !== appRoute() ? (
                 <button
                   type="button"
                   onClick={() => navigate(-1)}
@@ -632,7 +645,7 @@ export default function AppLayout() {
                   type="button"
                   style={headerButtonStyle}
                   aria-label="Notificaciones"
-                  onClick={() => navigate("/notifications")}
+                  onClick={() => navigate(appRoute("notifications"))}
                 >
                   <BellIcon mobile={isMobile} />
                 </button>
@@ -708,10 +721,22 @@ export default function AppLayout() {
                 WebkitBackdropFilter: "blur(8px)",
               }}
             >
-              <MobileNavItem to="/" label="Contratos" variant="home" />
-              <MobileNavItem to="/invoices" label="Facturas" variant="document" />
-              <MobileNavItem to="/tenant-payments" label="Pagos" variant="money" />
-              <MobileNavItem to="/menu" label="Menú" variant="menu" />
+              <MobileNavItem to={appRoute()} label="Contratos" variant="home" />
+              <MobileNavItem
+                to={appRoute("invoices")}
+                label="Facturas"
+                variant="document"
+              />
+              <MobileNavItem
+                to={appRoute("tenant-payments")}
+                label="Pagos"
+                variant="money"
+              />
+              <MobileNavItem
+                to={appRoute("menu")}
+                label="Menú"
+                variant="menu"
+              />
             </nav>
           </div>
         )}
@@ -784,7 +809,7 @@ export default function AppLayout() {
                   subtitle="Crear un contrato y agregar cargos"
                   onClick={() => {
                     setShowQuickActions(false);
-                    navigate("/subscriptions/new");
+                    navigate(appRoute("subscriptions/new"));
                   }}
                 />
                 <SheetAction
@@ -792,7 +817,7 @@ export default function AppLayout() {
                   subtitle="Ir al resumen de cobros"
                   onClick={() => {
                     setShowQuickActions(false);
-                    navigate("/invoices");
+                    navigate(appRoute("invoices"));
                   }}
                 />
                 <SheetAction
@@ -800,7 +825,7 @@ export default function AppLayout() {
                   subtitle="Revisar pagos registrados"
                   onClick={() => {
                     setShowQuickActions(false);
-                    navigate("/tenant-payments");
+                    navigate(appRoute("tenant-payments"));
                   }}
                 />
                 <SheetAction
@@ -808,7 +833,7 @@ export default function AppLayout() {
                   subtitle="Configurar remitentes para conciliación"
                   onClick={() => {
                     setShowQuickActions(false);
-                    navigate("/tenant-payment-senders");
+                    navigate(appRoute("tenant-payment-senders"));
                   }}
                 />
                 <SheetAction

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
+import { appRoute } from "@/lib/routes";
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -94,22 +95,13 @@ function ActionCard({
           fontSize: 15,
           fontWeight: 700,
           color: "#0f172a",
-          letterSpacing: "-0.02em",
         }}
       >
         {title}
       </div>
 
       {subtitle && (
-        <div
-          style={{
-            fontSize: 13,
-            color: "#64748b",
-            lineHeight: 1.45,
-          }}
-        >
-          {subtitle}
-        </div>
+        <div style={{ fontSize: 13, color: "#64748b" }}>{subtitle}</div>
       )}
     </button>
   );
@@ -139,15 +131,12 @@ function MenuRow({
         borderRadius: 18,
         padding: 14,
         display: "flex",
-        alignItems: "center",
         justifyContent: "space-between",
-        gap: 12,
-        boxShadow: "0 8px 24px rgba(15,23,42,0.04)",
+        alignItems: "center",
         cursor: "pointer",
-        textAlign: "left",
       }}
     >
-      <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0 }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
         <div
           style={{
             width: 42,
@@ -158,49 +147,30 @@ function MenuRow({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: 18,
-            flexShrink: 0,
           }}
         >
           {icon}
         </div>
 
-        <div style={{ minWidth: 0 }}>
+        <div>
           <div
             style={{
-              fontSize: 14,
               fontWeight: 700,
               color: danger ? "#991b1b" : "#0f172a",
-              letterSpacing: "-0.02em",
             }}
           >
             {title}
           </div>
 
           {subtitle && (
-            <div
-              style={{
-                marginTop: 2,
-                fontSize: 12,
-                color: "#64748b",
-                lineHeight: 1.4,
-              }}
-            >
+            <div style={{ fontSize: 12, color: "#64748b" }}>
               {subtitle}
             </div>
           )}
         </div>
       </div>
 
-      <div
-        style={{
-          fontSize: 20,
-          color: "#94a3b8",
-          flexShrink: 0,
-        }}
-      >
-        ›
-      </div>
+      <div style={{ color: "#94a3b8" }}>›</div>
     </button>
   );
 }
@@ -226,7 +196,7 @@ export default function MenuPage() {
         title: "Nuevo contrato",
         subtitle: "Crear un arriendo",
         icon: "＋",
-        onClick: () => navigate("/subscriptions/new"),
+        onClick: () => navigate(appRoute("subscriptions/new")),
         section: "quick",
         kind: "action",
       },
@@ -234,7 +204,7 @@ export default function MenuPage() {
         title: "Mi cuenta",
         subtitle: "Plan y datos",
         icon: "👤",
-        onClick: () => navigate("/account"),
+        onClick: () => navigate(appRoute("account")),
         section: "quick",
         kind: "action",
       },
@@ -242,7 +212,7 @@ export default function MenuPage() {
         title: "Remitentes bancarios",
         subtitle: "Correos asociados a contratistas",
         icon: "💳",
-        onClick: () => navigate("/tenant-payment-senders"),
+        onClick: () => navigate(appRoute("tenant-payment-senders")),
         section: "config",
         kind: "row",
       },
@@ -250,7 +220,7 @@ export default function MenuPage() {
         title: "Notificaciones",
         subtitle: "Avisos y preferencias",
         icon: "🔔",
-        onClick: () => navigate("/notifications"),
+        onClick: () => navigate(appRoute("notifications")),
         section: "config",
         kind: "row",
       },
@@ -258,7 +228,7 @@ export default function MenuPage() {
         title: "Ayuda",
         subtitle: "Centro de ayuda y soporte",
         icon: "❓",
-        onClick: () => navigate("/help"),
+        onClick: () => navigate(appRoute("help")),
         section: "config",
         kind: "row",
       },
@@ -278,128 +248,57 @@ export default function MenuPage() {
   );
 
   const filteredEntries = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.toLowerCase();
     if (!q) return entries;
 
-    return entries.filter((entry) => {
-      const title = entry.title.toLowerCase();
-      const subtitle = entry.subtitle?.toLowerCase() ?? "";
-      return title.includes(q) || subtitle.includes(q);
-    });
+    return entries.filter(
+      (e) =>
+        e.title.toLowerCase().includes(q) ||
+        e.subtitle?.toLowerCase().includes(q)
+    );
   }, [entries, search]);
 
-  const quickEntries = filteredEntries.filter((e) => e.section === "quick");
-  const configEntries = filteredEntries.filter((e) => e.section === "config");
-  const sessionEntries = filteredEntries.filter((e) => e.section === "session");
+  const quick = filteredEntries.filter((e) => e.section === "quick");
+  const config = filteredEntries.filter((e) => e.section === "config");
+  const session = filteredEntries.filter((e) => e.section === "session");
 
   return (
-    <div
-      style={{
-        padding: 8,
-        fontFamily: "Inter, system-ui, sans-serif",
-        maxWidth: 980,
-        margin: "0 auto",
-      }}
-    >
-      <section
-        style={{
-          padding: 18,
-          borderRadius: 24,
-          background: "#ffffff",
-          border: "1px solid #eef2f7",
-          boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
-        }}
-      >
-        <div
-          style={{
-            fontSize: 14,
-            color: "#64748b",
-            lineHeight: 1.5,
-            marginBottom: 14,
-          }}
-        >
-          Accesos rápidos, configuración y opciones de la cuenta.
-        </div>
-
+    <div style={{ maxWidth: 980, margin: "0 auto", padding: 12 }}>
+      <div style={{ marginBottom: 16 }}>
         <SearchInput value={search} onChange={setSearch} />
-      </section>
+      </div>
 
-      {quickEntries.length > 0 && (
-        <div style={{ marginTop: 16 }}>
+      {quick.length > 0 && (
+        <>
           <SectionTitle>Accesos rápidos</SectionTitle>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 12,
-            }}
-          >
-            {quickEntries.map((entry) => (
-              <ActionCard
-                key={entry.title}
-                title={entry.title}
-                subtitle={entry.subtitle}
-                icon={entry.icon}
-                onClick={entry.onClick}
-              />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {quick.map((e) => (
+              <ActionCard key={e.title} {...e} />
             ))}
           </div>
-        </div>
+        </>
       )}
 
-      {configEntries.length > 0 && (
-        <div style={{ marginTop: 20 }}>
+      {config.length > 0 && (
+        <>
           <SectionTitle>Configuración</SectionTitle>
-
           <div style={{ display: "grid", gap: 10 }}>
-            {configEntries.map((entry) => (
-              <MenuRow
-                key={entry.title}
-                title={entry.title}
-                subtitle={entry.subtitle}
-                icon={entry.icon}
-                onClick={entry.onClick}
-                danger={entry.danger}
-              />
+            {config.map((e) => (
+              <MenuRow key={e.title} {...e} />
             ))}
           </div>
-        </div>
+        </>
       )}
 
-      {sessionEntries.length > 0 && (
-        <div style={{ marginTop: 20 }}>
+      {session.length > 0 && (
+        <>
           <SectionTitle>Sesión</SectionTitle>
-
           <div style={{ display: "grid", gap: 10 }}>
-            {sessionEntries.map((entry) => (
-              <MenuRow
-                key={entry.title}
-                title={entry.title}
-                subtitle={entry.subtitle}
-                icon={entry.icon}
-                onClick={entry.onClick}
-                danger={entry.danger}
-              />
+            {session.map((e) => (
+              <MenuRow key={e.title} {...e} />
             ))}
           </div>
-        </div>
-      )}
-
-      {filteredEntries.length === 0 && (
-        <div
-          style={{
-            marginTop: 20,
-            padding: 18,
-            borderRadius: 20,
-            background: "#ffffff",
-            border: "1px dashed #dbe3ee",
-            color: "#64748b",
-            boxShadow: "0 8px 24px rgba(15,23,42,0.03)",
-          }}
-        >
-          No encontramos opciones con esa búsqueda.
-        </div>
+        </>
       )}
     </div>
   );

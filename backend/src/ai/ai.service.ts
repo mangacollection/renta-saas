@@ -16,6 +16,73 @@ export class AiService {
     private readonly openAiProvider: OpenAiProvider,
   ) {}
 
+  async generateLeadWhatsAppMessage(input: {
+  name: string;
+  properties?: string;
+  message?: string;
+}): Promise<{ message: string }> {
+  this.logger.log('generateLeadWhatsAppMessage called');
+
+  const prompt = `
+Eres un asistente comercial de RentaControl en Chile.
+
+Tu objetivo es contactar a un lead que se registró en la Beta.
+
+Datos:
+Nombre: ${input.name}
+Propiedades: ${input.properties ?? 'no especifica'}
+Mensaje: ${input.message ?? 'sin mensaje'}
+
+Genera un mensaje de WhatsApp:
+
+Reglas:
+- Español chileno
+- Tono cercano, profesional y humano
+- Máximo 60 palabras
+- No markdown
+- No listas
+- No hablar de pagos ni deuda
+- Enfocado en agendar una demo
+
+Debe:
+- saludar por nombre
+- mencionar que se registró en la Beta
+- invitar a mostrar cómo cobrar arriendos
+- cerrar con pregunta
+
+Entrega SOLO el mensaje final.
+`;
+
+  // 1️⃣ Gemini
+  try {
+    const message = await this.geminiProvider.generateText(prompt);
+    if (message && message.length > 10) {
+      return { message };
+    }
+  } catch {
+    this.logger.warn('Gemini lead message failed, trying OpenAI...');
+  }
+
+  // 2️⃣ OpenAI
+  try {
+    const message = await this.openAiProvider.generateText(prompt);
+    if (message && message.length > 10) {
+      return { message };
+    }
+  } catch {
+    this.logger.error('OpenAI lead message fallback failed');
+  }
+
+  // 3️⃣ Fallback
+  return {
+    message: `Hola ${input.name}, soy del equipo de RentaControl 👋
+
+Vimos que te registraste en la Beta.
+
+¿Te muestro cómo puedes empezar a cobrar arriendos hoy mismo?`,
+  };
+}
+
   async generateCollectionMessage(
     input: GenerateCollectionMessageInput,
   ): Promise<{ message: string }> {

@@ -7,6 +7,7 @@ import { getAccountPlan } from "@/features/account/account.api";
 import type { Subscription } from "./subscriptions.types";
 import { setPageTitle } from "@/lib/pageTitle";
 import { EmptyState } from "@/components/EmptyState";
+import { appRoute } from "@/lib/routes";
 
 type UiState =
   | { status: "loading" }
@@ -785,7 +786,7 @@ export function SubscriptionsPage() {
           <PrimaryButton
             onClick={() => {
               if (isBlocked) return;
-              navigate("/subscriptions/new");
+             navigate("/app/subscriptions/new");
             }}
             disabled={isBlocked}
             style={{ width: isMobile ? "100%" : "auto" }}
@@ -1021,7 +1022,7 @@ export function SubscriptionsPage() {
             <PrimaryButton
               onClick={() => {
                 if (isBlocked) return;
-                navigate("/subscriptions/new");
+                navigate("app/subscriptions/new");
               }}
               disabled={isBlocked}
             >
@@ -1051,7 +1052,7 @@ export function SubscriptionsPage() {
                   blocked={isBlocked}
                   onOpenDraft={(id) => {
                     if (isBlocked) return;
-                    navigate(`/subscriptions/new?subscriptionId=${id}`);
+                    navigate(`${appRoute("subscriptions/new")}?subscriptionId=${id}`);
                   }}
                 />
               ))}
@@ -1111,7 +1112,7 @@ export function SubscriptionsPage() {
                               blocked={isBlocked}
                               onClick={(id) => {
                                 if (isBlocked) return;
-                                navigate(`/subscriptions/new?subscriptionId=${id}`);
+                                navigate(`${appRoute("subscriptions/new")}?subscriptionId=${id}`);
                               }}
                             />
                           </td>
