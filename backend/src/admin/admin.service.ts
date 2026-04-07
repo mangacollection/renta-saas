@@ -2,12 +2,51 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiService } from '../ai/ai.service';
 
+
 @Injectable()
 export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiService: AiService,
+    
   ) {}
+
+  async updateLeadStatus(id: string, status: string) {
+  const allowedStatuses = [
+    'new',
+    'contacted',
+    'demo_scheduled',
+    'activated',
+    'rejected',
+  ];
+
+  if (!id) {
+    throw new BadRequestException('lead id is required');
+  }
+
+  if (!allowedStatuses.includes(status)) {
+    throw new BadRequestException('invalid lead status');
+  }
+
+  return this.prisma.lead.update({
+    where: { id },
+    data: { status },
+  });
+}
+
+async generateLeadWhatsAppMessage(body: {
+  name: string;
+  email?: string;
+  phone?: string;
+  properties?: string;
+  message?: string;
+}) {
+  return this.aiService.generateLeadWhatsAppMessage({
+    name: body.name,
+    properties: body.properties,
+    message: body.message,
+  });
+}
 
   async getPricingStats() {
   const accounts = await this.prisma.account.findMany({

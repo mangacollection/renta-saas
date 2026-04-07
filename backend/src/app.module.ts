@@ -17,9 +17,12 @@ import { GmailModule } from './integrations/gmail/gmail.module';
 import { AiModule } from './ai/ai.module';
 import { CollectionEventsModule } from './collection-events/collection-events.module';
 
+
 // ✅ NUEVO
 import { EmailService } from './email/email.service';
 import { AccountReminderJob } from './automation/account-reminder.job';
+
+import { PublicLeadsModule } from './public-leads/public-leads.module';
 
 @Module({
   imports: [
@@ -36,6 +39,7 @@ import { AccountReminderJob } from './automation/account-reminder.job';
     GmailModule,
     AiModule,
     CollectionEventsModule,
+    PublicLeadsModule,
   ],
   controllers: [AppController],
   providers: [

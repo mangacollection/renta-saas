@@ -17,14 +17,10 @@ export function ProtectedRoute() {
   }
 
   const isAdmin = user.email?.toLowerCase() === ADMIN_EMAIL;
-  const isAdminRoute = location.pathname.startsWith("/admin");
-
-  if (isAdmin && !isAdminRoute) {
-    return <Navigate to="/admin/account-payments" replace />;
-  }
+  const isAdminRoute = location.pathname.startsWith("/app/admin");
 
   if (!isAdmin && isAdminRoute) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/app" replace />;
   }
 
   return <Outlet />;

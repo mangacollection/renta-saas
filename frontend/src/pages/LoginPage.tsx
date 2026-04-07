@@ -18,43 +18,38 @@ export function LoginPage() {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
 
+  async function redirectUser() {
+    try {
+      const res = await api.get<{ role: string }>("/auth/me");
+      const role = res.data.role;
+
+      if (role === "admin") {
+        navigate("/app/admin/account-payments", { replace: true });
+      } else {
+        navigate("/app", { replace: true });
+      }
+    } catch {
+      navigate("/app", { replace: true });
+    }
+  }
+
   useEffect(() => {
     if (initializing) return;
     if (!user) return;
 
-    (async () => {
-      try {
-        const res = await api.get<{ role: string }>("/auth/me");
-        const role = res.data.role;
-
-        if (role === "admin") {
-          navigate("/admin/account-payments", { replace: true });
-        } else {
-          navigate("/", { replace: true });
-        }
-      } catch {
-        navigate("/", { replace: true });
-      }
-    })();
-  }, [initializing, user, navigate]);
+    void redirectUser();
+  }, [initializing, user]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
+    setResetMessage(null);
 
     try {
       await login(email.trim(), password);
-
-      const res = await api.get<{ role: string }>("/auth/me");
-      const role = res.data.role;
-
-      if (role === "admin") {
-        navigate("/admin/account-payments", { replace: true });
-      } else {
-        navigate("/", { replace: true });
-      }
-    } catch (err: any) {
+      await redirectUser();
+    } catch {
       setError("Credenciales incorrectas");
     } finally {
       setSubmitting(false);
@@ -62,7 +57,7 @@ export function LoginPage() {
   };
 
   const handleResetPassword = async () => {
-    if (!email) {
+    if (!email.trim()) {
       setResetMessage("Ingresa tu correo primero");
       return;
     }
@@ -72,10 +67,8 @@ export function LoginPage() {
 
     try {
       await sendPasswordResetEmail(firebaseAuth, email.trim());
-      setResetMessage(
-        "Te enviamos un correo para restablecer tu contraseña"
-      );
-    } catch (err) {
+      setResetMessage("Te enviamos un correo para restablecer tu contraseña");
+    } catch {
       setResetMessage("No se pudo enviar el correo");
     } finally {
       setResetLoading(false);
@@ -153,7 +146,6 @@ export function LoginPage() {
             </div>
           </label>
 
-          {/* 🔥 RESET PASSWORD */}
           <div
             style={{
               textAlign: "right",
@@ -173,9 +165,7 @@ export function LoginPage() {
                 fontSize: "13px",
               }}
             >
-              {resetLoading
-                ? "Enviando..."
-                : "¿Olvidaste tu contraseña?"}
+              {resetLoading ? "Enviando..." : "¿Olvidaste tu contraseña?"}
             </button>
           </div>
 

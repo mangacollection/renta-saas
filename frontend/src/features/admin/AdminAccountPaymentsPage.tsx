@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/axios";
 
 type AccountPayment = {
@@ -14,19 +14,27 @@ type AccountPayment = {
   };
 };
 
+type PaymentFilter = "all" | "received" | "approved";
+
+const BRAND = "#6d5efc";
+const BRAND_SOFT = "#f3f0ff";
+const BRAND_BORDER = "#dcd6ff";
+const BRAND_SHADOW = "0 10px 24px rgba(109,94,252,0.14)";
+
 const th: React.CSSProperties = {
   padding: "14px 12px",
-  borderBottom: "1px solid #e5e7eb",
+  borderBottom: "1px solid #eef2f7",
   fontWeight: 700,
-  fontSize: 14,
-  color: "#111827",
+  fontSize: 13,
+  color: "#475569",
   whiteSpace: "nowrap",
   textAlign: "left",
+  background: "#f8fafc",
 };
 
 const td: React.CSSProperties = {
   padding: "14px 12px",
-  borderBottom: "1px solid #e5e7eb",
+  borderBottom: "1px solid #eef2f7",
   color: "#111827",
   fontSize: 14,
   verticalAlign: "middle",
@@ -49,6 +57,71 @@ const cardStyle: React.CSSProperties = {
   boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
 };
 
+function SectionTitle({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontWeight: 800, color: "#0f172a", fontSize: 18 }}>
+        {title}
+      </div>
+      {subtitle ? (
+        <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
+          {subtitle}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MetricFilterCard({
+  label,
+  value,
+  active,
+  onClick,
+  valueColor,
+}: {
+  label: string;
+  value: string | number;
+  active: boolean;
+  onClick: () => void;
+  valueColor?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        ...cardStyle,
+        padding: 20,
+        cursor: "pointer",
+        textAlign: "left",
+        background: active ? BRAND_SOFT : "#ffffff",
+        border: active ? `1px solid ${BRAND_BORDER}` : "1px solid #e6e8ef",
+        boxShadow: active ? BRAND_SHADOW : "0 10px 30px rgba(15,23,42,0.06)",
+      }}
+    >
+      <div style={{ fontSize: 13, color: "#64748b", fontWeight: 600 }}>
+        {label}
+      </div>
+      <div
+        style={{
+          marginTop: 8,
+          fontSize: 28,
+          lineHeight: 1.1,
+          fontWeight: 800,
+          color: active ? BRAND : valueColor ?? "#0f172a",
+        }}
+      >
+        {value}
+      </div>
+    </button>
+  );
+}
+
 function StatusBadge({ status }: { status: string }) {
   const isApproved = status === "approved";
 
@@ -70,12 +143,20 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function formatCurrency(amount: number, currency: string) {
+  return new Intl.NumberFormat("es-CL", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 export default function AdminAccountPaymentsPage() {
   const [payments, setPayments] = useState<AccountPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<PaymentFilter>("received");
 
   const [simFrom, setSimFrom] = useState("dueno1@test.cl");
   const [simSubject, setSimSubject] = useState("Comprobante transferencia");
@@ -132,12 +213,30 @@ export default function AdminAccountPaymentsPage() {
   }
 
   useEffect(() => {
-    loadPayments();
+    void loadPayments();
   }, []);
 
-  const filteredPayments = statusFilter
-    ? payments.filter((p) => p.status === statusFilter)
-    : payments;
+  const stats = useMemo(() => {
+    const total = payments.length;
+    const receivedCount = payments.filter((p) => p.status === "received").length;
+    const approvedCount = payments.filter((p) => p.status === "approved").length;
+    const totalAmount = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+    return {
+      total,
+      receivedCount,
+      approvedCount,
+      totalAmount,
+    };
+  }, [payments]);
+
+  const filteredPayments = useMemo(() => {
+    if (statusFilter === "all") {
+      return payments;
+    }
+
+    return payments.filter((p) => p.status === statusFilter);
+  }, [payments, statusFilter]);
 
   if (loading) {
     return (
@@ -166,43 +265,105 @@ export default function AdminAccountPaymentsPage() {
     <div
       style={{
         padding: 24,
-        maxWidth: 1100,
+        maxWidth: 1240,
         margin: "0 auto",
         display: "grid",
         gap: 18,
       }}
     >
-      <div
-        style={{
-          ...cardStyle,
-          padding: 20,
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 16,
-          flexWrap: "wrap",
-          alignItems: "flex-start",
-        }}
-      >
-        <div>
-          <h1 style={{ margin: 0, color: "#0f172a" }}>Pagos SaaS</h1>
-          <div style={{ marginTop: 6, color: "#64748b", fontSize: 14 }}>
-            Gestión y aprobación de pagos de suscripción
-          </div>
-        </div>
-
-        <button
-          onClick={loadPayments}
+      <div style={{ ...cardStyle, padding: 20 }}>
+        <div
           style={{
-            padding: "10px 16px",
-            borderRadius: 12,
-            border: "1px solid #d7dbe6",
-            background: "#ffffff",
-            cursor: "pointer",
-            fontWeight: 700,
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 16,
+            flexWrap: "wrap",
+            alignItems: "flex-start",
           }}
         >
-          Actualizar
-        </button>
+          <div>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 28,
+                lineHeight: 1.1,
+                color: "#0f172a",
+                letterSpacing: "-0.03em",
+              }}
+            >
+              Pagos SaaS
+            </h1>
+            <div style={{ marginTop: 8, color: "#64748b", fontSize: 14 }}>
+              Gestión, conciliación y aprobación de pagos de suscripción.
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              void loadPayments();
+            }}
+            style={{
+              padding: "10px 16px",
+              borderRadius: 12,
+              border: `1px solid ${BRAND_BORDER}`,
+              background: "#ffffff",
+              cursor: "pointer",
+              fontWeight: 700,
+              color: BRAND,
+              boxShadow: "0 6px 18px rgba(109,94,252,0.08)",
+            }}
+          >
+            Actualizar
+          </button>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 14,
+        }}
+      >
+        <MetricFilterCard
+          label="Todos"
+          value={stats.total}
+          active={statusFilter === "all"}
+          onClick={() => setStatusFilter("all")}
+        />
+
+        <MetricFilterCard
+          label="Recibidos"
+          value={stats.receivedCount}
+          active={statusFilter === "received"}
+          onClick={() => setStatusFilter("received")}
+          valueColor="#92400e"
+        />
+
+        <MetricFilterCard
+          label="Aprobados"
+          value={stats.approvedCount}
+          active={statusFilter === "approved"}
+          onClick={() => setStatusFilter("approved")}
+          valueColor="#166534"
+        />
+
+        <div style={{ ...cardStyle, padding: 20 }}>
+          <div style={{ fontSize: 13, color: "#64748b", fontWeight: 600 }}>
+            Monto total
+          </div>
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 28,
+              lineHeight: 1.1,
+              fontWeight: 800,
+              color: "#0f172a",
+            }}
+          >
+            {formatCurrency(stats.totalAmount, "CLP")}
+          </div>
+        </div>
       </div>
 
       <div
@@ -211,19 +372,10 @@ export default function AdminAccountPaymentsPage() {
           padding: 18,
         }}
       >
-        <div style={{ fontWeight: 800, color: "#0f172a", marginBottom: 6 }}>
-          Simular Email
-        </div>
-
-        <div
-          style={{
-            fontSize: 13,
-            color: "#64748b",
-            marginBottom: 14,
-          }}
-        >
-          Útil para probar conciliación y alta de pagos desde correo.
-        </div>
+        <SectionTitle
+          title="Simular email"
+          subtitle="Útil para probar conciliación y alta de pagos desde correo."
+        />
 
         <div
           style={{
@@ -290,11 +442,12 @@ export default function AdminAccountPaymentsPage() {
               padding: "10px 14px",
               borderRadius: 12,
               border: "none",
-              background: "#0f172a",
+              background: BRAND,
               color: "#ffffff",
               fontWeight: 700,
               cursor: simLoading ? "not-allowed" : "pointer",
               opacity: simLoading ? 0.7 : 1,
+              boxShadow: "0 10px 20px rgba(109,94,252,0.18)",
             }}
           >
             {simLoading ? "Enviando..." : "Simular Email"}
@@ -311,85 +464,19 @@ export default function AdminAccountPaymentsPage() {
       <div
         style={{
           ...cardStyle,
-          padding: 16,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <button
-            onClick={() => setStatusFilter(null)}
-            style={{
-              padding: "8px 16px",
-              background: statusFilter === null ? "#6d5efc" : "#f1f5f9",
-              color: statusFilter === null ? "#fff" : "#0f172a",
-              borderRadius: 12,
-              border: statusFilter === null ? "none" : "1px solid #d7dbe6",
-              cursor: "pointer",
-              fontWeight: 700,
-            }}
-          >
-            Todos
-          </button>
-
-          <button
-            onClick={() => setStatusFilter("received")}
-            style={{
-              padding: "8px 16px",
-              background: statusFilter === "received" ? "#6d5efc" : "#f1f5f9",
-              color: statusFilter === "received" ? "#fff" : "#0f172a",
-              borderRadius: 12,
-              border:
-                statusFilter === "received" ? "none" : "1px solid #d7dbe6",
-              cursor: "pointer",
-              fontWeight: 700,
-            }}
-          >
-            Recibidos
-          </button>
-
-          <button
-            onClick={() => setStatusFilter("approved")}
-            style={{
-              padding: "8px 16px",
-              background: statusFilter === "approved" ? "#6d5efc" : "#f1f5f9",
-              color: statusFilter === "approved" ? "#fff" : "#0f172a",
-              borderRadius: 12,
-              border:
-                statusFilter === "approved" ? "none" : "1px solid #d7dbe6",
-              cursor: "pointer",
-              fontWeight: 700,
-            }}
-          >
-            Aprobados
-          </button>
-        </div>
-      </div>
-
-      <div
-        style={{
-          ...cardStyle,
           overflow: "hidden",
         }}
       >
-        <div
-          style={{
-            padding: 18,
-            borderBottom: "1px solid #eef2f7",
-            fontWeight: 800,
-            color: "#0f172a",
-          }}
-        >
-          Historial de pagos
+        <div style={{ padding: 18, borderBottom: "1px solid #eef2f7" }}>
+          <SectionTitle
+            title="Historial de pagos"
+            subtitle="Revisa pagos recibidos, pagos aprobados y acciones pendientes."
+          />
         </div>
 
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ background: "#f8fafc" }}>
+            <thead>
               <tr>
                 <th style={th}>Fecha</th>
                 <th style={th}>Cuenta</th>
@@ -405,13 +492,7 @@ export default function AdminAccountPaymentsPage() {
                     {new Date(p.createdAt).toLocaleDateString("es-CL")}
                   </td>
                   <td style={td}>{p.account.name}</td>
-                  <td style={td}>
-                    {new Intl.NumberFormat("es-CL", {
-                      style: "currency",
-                      currency: p.currency,
-                      maximumFractionDigits: 0,
-                    }).format(p.amount)}
-                  </td>
+                  <td style={td}>{formatCurrency(p.amount, p.currency)}</td>
                   <td style={td}>
                     <StatusBadge status={p.status} />
 

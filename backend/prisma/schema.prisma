@@ -206,21 +206,21 @@ model SubscriptionItem {
 }
 
 model Invoice {
-  id             String        @id @default(cuid())
-  subscriptionId String
-  type           InvoiceType   @default(monthly)
-  period         String
-  total          Int
-  dueDate        DateTime
-  status         InvoiceStatus @default(pending)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id               String        @id @default(cuid())
+  subscriptionId   String
+  type             InvoiceType   @default(monthly)
+  period           String
+  total            Int
+  dueDate          DateTime
+  status           InvoiceStatus @default(pending)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  subscription   Subscription    @relation(fields: [subscriptionId], references: [id])
-  items          InvoiceItem[]
-  ledgerEntries  LedgerEntry[]
-  payments       Payment[]
-  tenantPayments TenantPayment[]
+  subscription     Subscription    @relation(fields: [subscriptionId], references: [id])
+  items            InvoiceItem[]
+  ledgerEntries    LedgerEntry[]
+  payments         Payment[]
+  tenantPayments   TenantPayment[]
   collectionEvents CollectionEvent[]
 
   @@unique([subscriptionId, type, period])
@@ -397,4 +397,19 @@ model PricingConfig {
 
   @@index([plan, isActive])
   @@unique([plan, pricingCode])
+}
+
+model Lead {
+  id         String   @id @default(cuid())
+  name       String
+  email      String   @unique
+  phone      String
+  rut        String?
+  properties Int?
+  message    String?
+  status     String   @default("new")
+  createdAt  DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@index([createdAt])
 }

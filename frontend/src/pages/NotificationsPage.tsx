@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { appRoute } from "@/lib/routes";
 
 function InfoCard({
   title,
@@ -107,7 +108,7 @@ export default function NotificationsPage() {
 
       <button
         type="button"
-        onClick={() => navigate("/menu")}
+        onClick={() => navigate(appRoute("menu"))}
         style={{
           marginTop: 18,
           border: "1px solid #e2e8f0",

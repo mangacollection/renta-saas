@@ -27,6 +27,35 @@ export class AdminController {
     private readonly prisma: PrismaService,
   ) {}
 
+  @Patch('leads/:id')
+updateLeadStatus(
+  @Param('id') id: string,
+  @Body() body: { status: string },
+) {
+  return this.adminService.updateLeadStatus(id, body.status);
+}
+
+  @Post('leads/generate-whatsapp-message')
+generateLeadWhatsAppMessage(
+  @Body()
+  body: {
+    name: string;
+    email?: string;
+    phone?: string;
+    properties?: string;
+    message?: string;
+  },
+) {
+  return this.adminService.generateLeadWhatsAppMessage(body);
+}
+
+  @Get('leads')
+async getLeads() {
+  return this.prisma.lead.findMany({
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
   @Get('pricing-stats')
 getPricingStats() {
   return this.adminService.getPricingStats();

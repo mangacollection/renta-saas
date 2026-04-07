@@ -17,12 +17,19 @@ import MenuPage from "@/pages/MenuPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import HelpPage from "@/pages/HelpPage";
 import AdminPricingPage from "@/features/admin/AdminPricingPage";
+import LandingPage from "@/pages/public/LandingPage";
+import SignupPage from "@/pages/public/SignupPage";
+import ThanksPage from "@/pages/public/ThanksPage";
+import AdminLeadsPage from "@/features/admin/AdminLeadsPage";
 
 export const router = createBrowserRouter([
+  { path: "/", element: <LandingPage /> },
+  { path: "/signup", element: <SignupPage /> },
   { path: "/login", element: <LoginPage /> },
+  { path: "/gracias", element: <ThanksPage /> },
 
   {
-    path: "/",
+    path: "/app",
     element: <ProtectedRoute />,
     children: [
       {
@@ -48,6 +55,7 @@ export const router = createBrowserRouter([
           { path: "accounts", element: <AdminAccountsPage /> },
           { path: "observability", element: <AdminObservabilityPage /> },
           { path: "pricing", element: <AdminPricingPage /> },
+          { path: "leads", element: <AdminLeadsPage /> },
         ],
       },
     ],
