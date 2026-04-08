@@ -8,6 +8,8 @@ export type CreatePublicLeadInput = {
   rut?: string;
   properties?: number;
   message?: string;
+  company?: string;
+  turnstileToken?: string;
 };
 
 export type CreatePublicLeadResponse = {

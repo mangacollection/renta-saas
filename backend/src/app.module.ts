@@ -16,6 +16,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { GmailModule } from './integrations/gmail/gmail.module';
 import { AiModule } from './ai/ai.module';
 import { CollectionEventsModule } from './collection-events/collection-events.module';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 
 // ✅ NUEVO
@@ -26,6 +27,12 @@ import { PublicLeadsModule } from './public-leads/public-leads.module';
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([
+  {
+    ttl: 15 * 60 * 1000,
+    limit: 3,
+  },
+]),
     ScheduleModule.forRoot(),
     PrismaModule,
     AdminModule,
