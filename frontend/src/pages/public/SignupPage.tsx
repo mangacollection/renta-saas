@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import { createPublicLead } from "@/features/public/public.api";
+import { env } from "@/config/env";
 
 type FormValues = {
   name: string;
@@ -10,6 +11,7 @@ type FormValues = {
   rut: string;
   properties: string;
   message: string;
+  company: string;
 };
 
 type FormErrors = Partial<Record<keyof FormValues, string>>;
@@ -21,7 +23,28 @@ const initialValues: FormValues = {
   rut: "",
   properties: "",
   message: "",
+  company: "",
 };
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (
+        container: string | HTMLElement,
+        options: {
+          sitekey: string;
+          callback?: (token: string) => void;
+          "expired-callback"?: () => void;
+          "error-callback"?: () => void;
+          theme?: "light" | "dark" | "auto";
+          appearance?: "always" | "execute" | "interaction-only";
+        },
+      ) => string;
+      reset: (widgetId?: string) => void;
+      remove?: (widgetId?: string) => void;
+    };
+  }
+}
 
 function formatChileanPhone(value: string) {
   const digits = value.replace(/\D/g, "");
@@ -139,8 +162,84 @@ export default function SignupPage() {
   const [values, setValues] = useState<FormValues>(initialValues);
   const [errors, setErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [submitError, setSubmitError] = useState("");
+
+  const turnstileContainerRef = useRef<HTMLDivElement | null>(null);
+  const turnstileWidgetIdRef = useRef<string | null>(null);
+
+  const totalFields = 5; // name, email, phone, rut, properties
+
+  const completedFields = [
+    values.name,
+    values.email,
+    values.phone,
+    values.rut,
+    values.properties,
+  ].filter((v) => v && v.trim() !== "").length;
+
+const progress = (completedFields / totalFields) * 100;
+
+  useEffect(() => {
+    function renderWidget() {
+      if (!window.turnstile || !turnstileContainerRef.current) return;
+      if (turnstileWidgetIdRef.current) return;
+
+      turnstileWidgetIdRef.current = window.turnstile.render(
+        turnstileContainerRef.current,
+        {
+          sitekey: env.turnstileSiteKey,
+          theme: "light",
+          callback: (token: string) => {
+            setTurnstileToken(token);
+            setSubmitError("");
+          },
+          "expired-callback": () => {
+            setTurnstileToken(null);
+          },
+          "error-callback": () => {
+            setTurnstileToken(null);
+          },
+        },
+      );
+    }
+
+    if (window.turnstile) {
+      renderWidget();
+      return;
+    }
+
+    const existingScript = document.querySelector<HTMLScriptElement>(
+      'script[src^="https://challenges.cloudflare.com/turnstile/v0/api.js"]',
+    );
+
+    if (existingScript) {
+      existingScript.addEventListener("load", renderWidget);
+      return () => {
+        existingScript.removeEventListener("load", renderWidget);
+      };
+    }
+
+    const script = document.createElement("script");
+    script.src =
+      "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.async = true;
+    script.defer = true;
+    script.addEventListener("load", renderWidget);
+    document.body.appendChild(script);
+
+    return () => {
+      script.removeEventListener("load", renderWidget);
+    };
+  }, []);
+
+  function resetTurnstile() {
+    if (window.turnstile && turnstileWidgetIdRef.current) {
+      window.turnstile.reset(turnstileWidgetIdRef.current);
+    }
+    setTurnstileToken(null);
+  }
 
   function handleChange(
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -211,10 +310,19 @@ export default function SignupPage() {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (values.company && values.company.trim() !== "") {
+      return;
+    }
+
     setSuccessMessage("");
     setSubmitError("");
 
     if (!validateForm()) return;
+
+    if (!turnstileToken) {
+      setSubmitError("Verifica que eres humano antes de enviar tu solicitud.");
+      return;
+    }
 
     setLoading(true);
 
@@ -227,17 +335,23 @@ export default function SignupPage() {
         properties:
           values.properties.trim() === "" ? undefined : Number(values.properties),
         message: values.message.trim() || undefined,
+        company: values.company,
+        turnstileToken,
       });
 
       if (result.success) {
         setValues(initialValues);
         setErrors({});
+        resetTurnstile();
         navigate("/gracias");
         return;
       }
 
       setSubmitError("No pudimos procesar tu solicitud. Intenta nuevamente.");
+      resetTurnstile();
     } catch (error) {
+      resetTurnstile();
+
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
         const backendMessage =
@@ -252,7 +366,7 @@ export default function SignupPage() {
           return;
         }
 
-        if (status === 400 && backendMessage) {
+        if ((status === 400 || status === 429) && backendMessage) {
           setSubmitError(backendMessage);
           return;
         }
@@ -271,15 +385,15 @@ export default function SignupPage() {
       style={{
         minHeight: "100vh",
         background:
-          "radial-gradient(circle at top right, rgba(109, 94, 252, 0.10), transparent 28%), #ffffff",
+          "radial-gradient(circle at top right, rgba(109, 94, 252, 0.14), transparent 30%), radial-gradient(circle at bottom left, rgba(79, 70, 229, 0.08), transparent 34%), linear-gradient(180deg, #fcfcff 0%, #ffffff 100%)",
         color: "#0f172a",
       }}
     >
       <section
         style={{
-          maxWidth: 760,
+          maxWidth: 860,
           margin: "0 auto",
-          padding: "24px 20px 80px",
+          padding: "24px 20px 72px",
         }}
       >
         <header
@@ -288,18 +402,37 @@ export default function SignupPage() {
             justifyContent: "space-between",
             alignItems: "center",
             gap: 12,
-            marginBottom: 56,
+            marginBottom: 40,
+            flexWrap: "wrap",
           }}
         >
           <div
             style={{
-              fontWeight: 600,
-              fontSize: 18,
-              letterSpacing: "-0.02em",
-              color: "#111827",
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
             }}
           >
-            RentaControl
+            <div
+              style={{
+                width: 14,
+                height: 14,
+                borderRadius: 999,
+                background: "linear-gradient(135deg, #6d5efc, #4f46e5)",
+                boxShadow: "0 0 0 6px rgba(109, 94, 252, 0.12)",
+              }}
+            />
+
+            <div
+              style={{
+                fontWeight: 700,
+                fontSize: 18,
+                letterSpacing: "-0.02em",
+                color: "#111827",
+              }}
+            >
+              RentaControl
+            </div>
           </div>
 
           <Link
@@ -307,8 +440,12 @@ export default function SignupPage() {
             style={{
               textDecoration: "none",
               fontSize: 14,
-              color: "#667085",
-              fontWeight: 500,
+              color: "#475467",
+              fontWeight: 600,
+              padding: "10px 14px",
+              borderRadius: 12,
+              border: "1px solid #eaecf0",
+              background: "rgba(255,255,255,0.9)",
             }}
           >
             Volver
@@ -317,227 +454,334 @@ export default function SignupPage() {
 
         <div
           style={{
-            maxWidth: 620,
+            display: "grid",
+            gridTemplateColumns: "1fr",
+            gap: 26,
           }}
         >
           <div
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              border: "1px solid #e9eaf3",
-              borderRadius: 999,
-              padding: "8px 12px",
-              fontSize: 13,
-              fontWeight: 600,
-              color: "#5648f3",
-              background: "#ffffff",
+              maxWidth: 640,
             }}
           >
-            Solicitar acceso Beta
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                border: "1px solid rgba(109, 94, 252, 0.16)",
+                borderRadius: 999,
+                padding: "8px 12px",
+                fontSize: 13,
+                fontWeight: 700,
+                color: "#5648f3",
+                background: "rgba(255,255,255,0.85)",
+                boxShadow: "0 8px 24px rgba(15, 23, 42, 0.04)",
+              }}
+            >
+              Solicitar acceso Beta
+            </div>
+
+            <h1
+              style={{
+                fontSize: "clamp(2.25rem, 7vw, 3.7rem)",
+                lineHeight: 1.02,
+                letterSpacing: "-0.05em",
+                fontWeight: 800,
+                margin: "20px 0 0",
+                maxWidth: 620,
+              }}
+            >
+              Déjanos tus datos y te contactamos.
+            </h1>
+
+            <p
+              style={{
+                marginTop: 18,
+                marginBottom: 0,
+                fontSize: 18,
+                color: "#667085",
+                lineHeight: 1.75,
+                maxWidth: 600,
+              }}
+            >
+              Te escribiremos por WhatsApp para mostrarte RentaControl,
+              entender tu operación y ayudarte a comenzar con la Beta de forma
+              simple y acompañada.
+            </p>
           </div>
 
-          <h1
+          <div
             style={{
-              fontSize: "clamp(2.2rem, 7vw, 3.4rem)",
-              lineHeight: 1.05,
-              letterSpacing: "-0.04em",
-              fontWeight: 600,
-              margin: "20px 0 0",
-              maxWidth: 560,
+              maxWidth: 680,
+              background: "rgba(255,255,255,0.88)",
+              border: "1px solid rgba(15, 23, 42, 0.08)",
+              borderRadius: 28,
+              padding: "24px 20px",
+              boxShadow: "0 24px 64px rgba(15, 23, 42, 0.10)",
+              backdropFilter: "blur(14px)",
             }}
           >
-            Déjanos tus datos y te contactamos.
-          </h1>
-
-          <p
-            style={{
-              marginTop: 18,
-              marginBottom: 0,
-              fontSize: 18,
-              color: "#667085",
-              lineHeight: 1.7,
-              maxWidth: 560,
-            }}
-          >
-            Te escribiremos por WhatsApp para mostrarte RentaControl y ayudarte a comenzar con la Beta.
-          </p>
-        </div>
-
-        <div
-          style={{
-            marginTop: 40,
-            maxWidth: 620,
-            paddingTop: 28,
-            borderTop: "1px solid #f1f5f9",
-          }}
-        >
-          {successMessage ? (
             <div
               style={{
-                marginBottom: 24,
-                padding: "14px 16px",
-                borderRadius: 12,
-                background: "#eefcf3",
-                border: "1px solid #bbf7d0",
-                color: "#166534",
-                fontWeight: 600,
-                lineHeight: 1.6,
-                fontSize: 14,
+                marginBottom: 22,
               }}
             >
-              {successMessage}
+              <div
+              style={{
+                height: 4,
+                width: "100%",
+                background: "rgba(109, 94, 252, 0.08)",
+                borderRadius: 999,
+                overflow: "hidden",
+                marginBottom: 18,
+              }}
+            >
+              <div
+                style={{
+                  height: "100%",
+                  width: `${progress}%`,
+                  background: "linear-gradient(90deg, #6d5efc, #4f46e5)",
+                  borderRadius: 999,
+                  transition: "width 0.4s ease",
+                }}
+              />
             </div>
-          ) : null}
-
-          {submitError ? (
-            <div
-              style={{
-                marginBottom: 24,
-                padding: "14px 16px",
-                borderRadius: 12,
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
-                color: "#991b1b",
-                fontWeight: 600,
-                lineHeight: 1.6,
-                fontSize: 14,
-              }}
-            >
-              {submitError}
-            </div>
-          ) : null}
-
-          <form onSubmit={handleSubmit} noValidate>
-            <div
-              style={{
-                display: "grid",
-                gap: 22,
-              }}
-            >
-              <Field
-                label="Nombre completo"
-                name="name"
-                value={values.name}
-                onChange={handleChange}
-                error={errors.name}
-                disabled={loading}
-              />
-
-              <Field
-                label="Email"
-                name="email"
-                type="email"
-                value={values.email}
-                onChange={handleChange}
-                error={errors.email}
-                disabled={loading}
-              />
-
-              <Field
-                label="WhatsApp / teléfono"
-                name="phone"
-                value={values.phone}
-                onChange={handleChange}
-                error={errors.phone}
-                disabled={loading}
-              />
-
-              <Field
-                label="RUT"
-                name="rut"
-                value={values.rut}
-                onChange={handleChange}
-                error={errors.rut}
-                disabled={loading}
-              />
-
-              <Field
-                label="Número de propiedades"
-                name="properties"
-                type="text"
-                value={values.properties}
-                onChange={handleChange}
-                error={errors.properties}
-                disabled={loading}
-                inputMode="numeric"
-              />
-
-              <div>
-                <label
-                  htmlFor="message"
-                  style={{
-                    display: "block",
-                    marginBottom: 8,
-                    fontWeight: 600,
-                    fontSize: 14,
-                    color: "#111827",
-                  }}
-                >
-                  Mensaje
-                </label>
-
-                <textarea
-                  id="message"
-                  name="message"
-                  value={values.message}
-                  onChange={handleChange}
-                  disabled={loading}
-                  rows={4}
-                  style={{
-                    width: "100%",
-                    border: "1px solid #e4e7ec",
-                    borderRadius: 10,
-                    padding: "14px 14px",
-                    fontSize: 15,
-                    color: "#111827",
-                    background: "#ffffff",
-                    outline: "none",
-                    resize: "vertical",
-                    boxSizing: "border-box",
-                    fontFamily: "inherit",
-                  }}
-                />
+              <div
+                style={{
+                  fontSize: 24,
+                  fontWeight: 800,
+                  letterSpacing: "-0.03em",
+                  color: "#111827",
+                }}
+              >
+                Solicita tu acceso
               </div>
 
               <div
                 style={{
-                  display: "flex",
-                  gap: 14,
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  paddingTop: 6,
+                  marginTop: 8,
+                  fontSize: 14,
+                  color: "#667085",
+                  lineHeight: 1.7,
                 }}
               >
+                Respuesta breve, contacto humano y acompañamiento inicial.
+              </div>
+            </div>
+
+            {successMessage ? (
+              <div
+                style={{
+                  marginBottom: 20,
+                  padding: "14px 16px",
+                  borderRadius: 16,
+                  background: "#eefcf3",
+                  border: "1px solid #bbf7d0",
+                  color: "#166534",
+                  fontWeight: 600,
+                  lineHeight: 1.6,
+                  fontSize: 14,
+                }}
+              >
+                {successMessage}
+              </div>
+            ) : null}
+
+            {submitError ? (
+              <div
+                style={{
+                  marginBottom: 20,
+                  padding: "14px 16px",
+                  borderRadius: 16,
+                  background: "#fef2f2",
+                  border: "1px solid #fecaca",
+                  color: "#991b1b",
+                  fontWeight: 600,
+                  lineHeight: 1.6,
+                  fontSize: 14,
+                }}
+              >
+                {submitError}
+              </div>
+            ) : null}
+
+            <form onSubmit={handleSubmit} noValidate>
+              <input
+                type="text"
+                name="company"
+                value={values.company}
+                onChange={handleChange}
+                style={{ display: "none" }}
+                autoComplete="off"
+                tabIndex={-1}
+              />
+
+              <div
+                style={{
+                  display: "grid",
+                  gap: 18,
+                }}
+              >
+                <Field
+                  label="Nombre completo"
+                  name="name"
+                  value={values.name}
+                  onChange={handleChange}
+                  error={errors.name}
+                  disabled={loading}
+                />
+
+                <Field
+                  label="Email"
+                  name="email"
+                  type="email"
+                  value={values.email}
+                  onChange={handleChange}
+                  error={errors.email}
+                  disabled={loading}
+                  
+                />
+
+                <Field
+                  label="WhatsApp / teléfono"
+                  name="phone"
+                  value={values.phone}
+                  onChange={handleChange}
+                  error={errors.phone}
+                  disabled={loading}
+                  
+                />
+
+                <Field
+                  label="RUT"
+                  name="rut"
+                  value={values.rut}
+                  onChange={handleChange}
+                  error={errors.rut}
+                  disabled={loading}
+                 
+                />
+
+                <Field
+                  label="Número de propiedades"
+                  name="properties"
+                  type="text"
+                  value={values.properties}
+                  onChange={handleChange}
+                  error={errors.properties}
+                  disabled={loading}
+                  inputMode="numeric"
+                  
+                />
+
+                <div>
+                  <label
+                    htmlFor="message"
+                    style={{
+                      display: "block",
+                      marginBottom: 8,
+                      fontWeight: 700,
+                      fontSize: 14,
+                      color: "#111827",
+                    }}
+                  >
+                    Mensaje
+                  </label>
+
+                  <textarea
+                    id="message"
+                    name="message"
+                    value={values.message}
+                    onChange={handleChange}
+                    disabled={loading}
+                    rows={4}
+                    placeholder="¿Algo que desees comentar?."
+                    style={{
+                      width: "100%",
+                      border: "1px solid #e4e7ec",
+                      borderRadius: 16,
+                      padding: "14px 14px",
+                      fontSize: 15,
+                      color: "#111827",
+                      background: "#ffffff",
+                      outline: "none",
+                      resize: "vertical",
+                      boxSizing: "border-box",
+                      fontFamily: "inherit",
+                      lineHeight: 1.6,
+                    }}
+                  />
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 14,
+                    padding: 16,
+                    borderRadius: 20,
+                    background:
+                      "linear-gradient(180deg, rgba(248,250,252,0.9), rgba(255,255,255,0.95))",
+                    border: "1px solid rgba(109, 94, 252, 0.10)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: "#475467",
+                    }}
+                  >
+                    Verificación de seguridad
+                  </div>
+
+                  <div ref={turnstileContainerRef} style={{ minHeight: 65 }} />
+
                 <button
                   type="submit"
                   disabled={loading}
                   style={{
                     border: "none",
-                    background: "#6d5efc",
+                    background: "linear-gradient(135deg, #6d5efc, #4f46e5)",
                     color: "#ffffff",
-                    padding: "14px 18px",
-                    borderRadius: 8,
-                    fontWeight: 600,
+                    padding: "15px 18px",
+                    borderRadius: 14,
+                    fontWeight: 700,
                     fontSize: 15,
                     cursor: loading ? "not-allowed" : "pointer",
                     opacity: loading ? 0.7 : 1,
+                    boxShadow: "0 14px 28px rgba(109, 94, 252, 0.24)",
+                    width: "100%",
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (loading) return;
+                    e.currentTarget.style.transform = "translateY(-1px)";
+                    e.currentTarget.style.boxShadow =
+                      "0 18px 32px rgba(109, 94, 252, 0.35)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow =
+                      "0 14px 28px rgba(109, 94, 252, 0.24)";
                   }}
                 >
                   {loading ? "Enviando..." : "Solicitar acceso"}
                 </button>
 
-                <div
-                  style={{
-                    color: "#667085",
-                    fontSize: 14,
-                    lineHeight: 1.6,
-                  }}
-                >
-                  Respuesta breve y contacto por WhatsApp.
+                  <div
+                    style={{
+                      color: "#667085",
+                      fontSize: 14,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    Te contactaremos por WhatsApp para mostrarte el producto y
+                    ayudarte a partir rápido.
+                  </div>
                 </div>
               </div>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
       </section>
     </main>
@@ -553,6 +797,7 @@ type FieldProps = {
   disabled?: boolean;
   type?: string;
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  placeholder?: string;
 };
 
 function Field({
@@ -564,6 +809,7 @@ function Field({
   disabled,
   type = "text",
   inputMode,
+  placeholder,
 }: FieldProps) {
   return (
     <div>
@@ -572,7 +818,7 @@ function Field({
         style={{
           display: "block",
           marginBottom: 8,
-          fontWeight: 600,
+          fontWeight: 700,
           fontSize: 14,
           color: "#111827",
         }}
@@ -588,16 +834,29 @@ function Field({
         onChange={onChange}
         disabled={disabled}
         inputMode={inputMode}
+        placeholder={placeholder}
         style={{
           width: "100%",
           border: `1px solid ${error ? "#f97066" : "#e4e7ec"}`,
-          borderRadius: 10,
+          borderRadius: 14,
           padding: "14px 14px",
           fontSize: 15,
           color: "#111827",
           background: "#ffffff",
           outline: "none",
           boxSizing: "border-box",
+          transition: "all 0.2s ease",
+        }}
+        onFocus={(e) => {
+          e.currentTarget.style.border = "1px solid #6d5efc";
+          e.currentTarget.style.boxShadow =
+            "0 0 0 4px rgba(109, 94, 252, 0.12)";
+        }}
+        onBlur={(e) => {
+          e.currentTarget.style.border = error
+            ? "1px solid #f97066"
+            : "1px solid #e4e7ec";
+          e.currentTarget.style.boxShadow = "none";
         }}
       />
 
@@ -607,7 +866,7 @@ function Field({
             marginTop: 8,
             color: "#b42318",
             fontSize: 13,
-            fontWeight: 500,
+            fontWeight: 600,
           }}
         >
           {error}

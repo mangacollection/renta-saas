@@ -5,4 +5,6 @@ export class CreatePublicLeadDto {
   rut?: string;
   properties?: number;
   message?: string;
+  company?: string;
+  turnstileToken?: string;
 }
