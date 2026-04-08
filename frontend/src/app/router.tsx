@@ -17,16 +17,19 @@ import MenuPage from "@/pages/MenuPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import HelpPage from "@/pages/HelpPage";
 import AdminPricingPage from "@/features/admin/AdminPricingPage";
-import LandingPage from "@/pages/public/LandingPage";
 import SignupPage from "@/pages/public/SignupPage";
 import ThanksPage from "@/pages/public/ThanksPage";
 import AdminLeadsPage from "@/features/admin/AdminLeadsPage";
+import HomeInvitePage from "@/pages/public/HomeInvitePage";
+import WaitlistPage from "@/pages/public/WaitlistPage";
 
 export const router = createBrowserRouter([
-  { path: "/", element: <LandingPage /> },
+  { path: "/", element: <HomeInvitePage /> },
   { path: "/signup", element: <SignupPage /> },
   { path: "/login", element: <LoginPage /> },
   { path: "/gracias", element: <ThanksPage /> },
+  { path: "/test-invite", element: <HomeInvitePage /> },
+  { path: "/waitlist", element: <WaitlistPage /> },
 
   {
     path: "/app",

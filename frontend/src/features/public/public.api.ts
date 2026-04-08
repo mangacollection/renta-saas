@@ -10,6 +10,7 @@ export type CreatePublicLeadInput = {
   message?: string;
   company?: string;
   turnstileToken?: string;
+  source?: string;
 };
 
 export type CreatePublicLeadResponse = {
