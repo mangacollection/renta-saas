@@ -9,6 +9,7 @@ async function bootstrap() {
     "http://localhost:5173",
     "http://192.168.100.171:5173", // 👈 ESTE ES CLAVE
     "https://app.rentacontrol.cl",
+    "https://rentacontrol.cl",
   ],
   credentials: true,
 });
